@@ -4,7 +4,7 @@ OpenShift **Security Context Contraints (SCCs)** are used to control permissions
 
 By default, pods are restricted from accessing any protected resources on the cluster. For typical stateless workloads, this is not an issue. But what if your application requires access to storage, networking services, or user management? This is where SCCs come into play.
 
-## What is an SCC?
+## How do SCCs work?
 
 Similar to the way that RBAC resources control user access, administrators can use SCCs to control permissions for pods.
 
@@ -144,6 +144,13 @@ SCCs have a priority field that affects the ordering when a pod request is valid
 * Highest priority first, nil is considered a 0 priority
 * If priorities are equal, the SCCs will be sorted from most restrictive to least restrictive
 * If both priorities and restrictions are equal the SCCs will be sorted by name
+
+## Detailed Flow
+
+ Now that we have covered all of the details, we can update our initial flow diagram:
+
+![detailed-flow](images/detailed-flow.png)
+
 
 ## availablecapabilities/constraints (SELinuxpolicies,AppArmorprofiles,  etc.)
 
