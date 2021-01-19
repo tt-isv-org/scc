@@ -6,12 +6,12 @@ By default, pods are restricted from accessing any protected resources on the cl
 
 ## How do SCCs work?
 
-Similar to the way that RBAC resources control user access, administrators can use SCCs to control permissions for pods.
+Similar to the way that role-based access control (RBAC) resources control user access, administrators can use SCCs to control permissions for pods.
 
 Each Openshift cluster contains 8 default SCCs, each specifying a set of allowed capabilities:
 
-* **restricted** -  denies access to all host features and requires pods to be run with a UID, and SELinux context that are allocated to the namespace.
-* **anyuid** - same as restricted, but allows users to run with any UID and GID.
+* **restricted** -  denies access to all host features and requires pods to be run with a user ID (UID), and SELinux context that are allocated to the namespace.
+* **anyuid** - same as restricted, but allows users to run with any UID and group ID (GID).
 * **hostaccess** - allows access to all host namespaces but still requires pods to be run with a UID and SELinux context that are allocated to the namespace.
 * **hostmount-anyuid** - provides all the features of the restricted SCC but allows host mounts and any UID by a pod.  This is primarily used by the persistent volume recycler.
 * **hostnetwork** - allows using host networking and host ports but still requires pods to be run with a UID and SELinux context that are allocated to the namespace.
@@ -34,7 +34,7 @@ Here is an overview of how the process works:
 
 ## Managing SCCs
 
-Administrators can manage the SCCs on the OpenShift platform via the OepnShift CLI.
+Administrators can manage the SCCs on the OpenShift platform via the OpenShift CLI.
 
 ```bash
 oc get scc
@@ -46,7 +46,7 @@ oc delete scc <scc name>
 
 When determining which SCC to assign, it is important to remember that less is better. If your pod requires capability A, don't select an SCC that provides capalities A, B, and C.
 
-If none of the default SCCs provide exactly what you are looking for, you can create a custom one. It requires you sumbit a YAML file, such as the following:
+If none of the default SCCs provide exactly what you are looking for, you can create a custom one. It requires you submit a YAML file, such as the following:
 
 ```yaml
 kind: SecurityContextConstraints
@@ -131,7 +131,7 @@ spec:
 ...
 ```
 
-The `securityContext` object is used to request capabilities for both the pod, and for all containers within in the pod. To be accepted, the capabilites must match what is allowed by the associated SCC.
+The `securityContext` object is used to request capabilities for both the pod and for all containers within in the pod. To be accepted, the capabilites must match what is allowed by the associated SCC.
 
 ## SCC Admission Process
 
