@@ -2,25 +2,25 @@
 
 To better understand how both Role-Based Access Control (**RBAC**) and Security Context Contraints (**SCC**) are used to control access on an OpenShift Container Platform, let's walk-through a common deployment scenario.
 
-Typically, there are 3 roles associated with deploying a pod on an OpenShift Container Platform.
+First, let's identify the personas that are typically involved in the process of developing an application, configuring a pod to contain the application, and then deploying that pod on an OpenShift Container Platform.
 
 * **Programmer** - responsible for developing the app or service that will run in the pod.
 * **Deployer** - responsible for creating the deployment manifest that will define how the pod will be deployed and run.
 * **Administrator** - ensures the security of the platform by limiting priviledges.
 
-Administrators use **RBAC** resources to control user access. In our example, the administrator will not allow the "programmer" any special priviledges, but will grant the "deployer" the permission to deploy pods.
+Administrators use **RBAC** resources to control user access. In our example, the administrator will grant the "deployer" the permission to deploy pods. We won't worry about permissions for the "programmer" since they don't typically need access to the cluster.
 
 If the application is a typical stateless workload, the "deployer" will generate a basic deployment manifest, and the pod will be deployed without any issues.
 
 But what if the application requires access to storage, networking services, or user management (SITE BETTER/CLEARER USE CASES)? This will require that the "deployer" request additional permissions or capabilities in the manifest. And how is it determined if the request is allowed? This is where SCCs come into play.
 
-SCCs are associated with RBAC user roles. When a pod is deployed, the user account used to deploy the pod is matched up with the SCCs assigned to that role. If the SCC allows the capabilities requested by the manifest, the pod is deployed and run.
+SCCs are associated with users, groups, and/or service accounts, typically via RBAC roles. When a pod is deployed, the SCCs associated with the user or service account that owns the pod (typically the one used to deploy the pod) specify which protected resources the pod can access. If the SCCs allow all of the capabilities that the pod requests, the pod is allowed to start running; otherwise, starting the pod fails.
 
 If the pod is denied the requested capabilities, the "administrator" will need to:
 
 * determine that the requested capabilities in the manifest are in fact needed.
 * determine what SCC will allow the requested capabilities, or if none exist, create a new one.
-* determine what roles are assigned to the SCC, or create a new role if needed.
+* assign the SCC to a role for the appropriate users, groups, and/or service accounts, or create such a role if needed.
 * assign the "deployer" to this new role.
 
 Here is an overview of how roles and SCCs are involved in the deployment process:
@@ -28,15 +28,15 @@ Here is an overview of how roles and SCCs are involved in the deployment process
 ![flow](images/flow.png)
 
 1. The RBAC/Cluster administrator creates a role which is assigned a security context constraint
-1. The administrator then assigns roles to both programmer and deployer user accounts
-1. The programmer develops an application or service
-1. The deployer accepts the application
+1. The administrator grants "deployment" permissions to the deployer user account
+1. Outside the OpenShift cluster environment, the programmer develops an application or service, and ...
+1. Delivers the application to the deployer
 1. The deployer creates a pod deployment manifest that may or may not requests additional capabilities
 1. The manifest is processed by the OpenShift container platform
-1. OpenShift compares the pod request against the associated SCC
-1. If the requested capabilities are allowed by the SCC, OpenShift deploys the pod containing the application
+1. The pod is deployed in the OpenShift container platform
+1. When OpenShift attempts to start the pod, it compares the pods requested capabilities against the SCC associated with the pod owner. If the SCC has all of the capabilities the pod requests, the cluster will allow the pod to start. Otherwise, the pod will fail with some specific start-failed error status.
 
-Now that we have a high-level view of how deployment security is handled on an OpenShift container platform, let's dig into the details. 
+Now that we have a high-level view of how deployment security is handled on an OpenShift container platform, let's dig into the details.
 
 ## Default SCCs
 
