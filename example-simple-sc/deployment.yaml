@@ -1,0 +1,22 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: liberty-deployment
+  labels:
+    app: liberty
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: liberty
+  template:
+    metadata:
+      labels:
+        app: liberty
+    spec:
+      containers:
+        - name: liberty
+          image: icr.io/ibm/liberty:kernel
+          securityContext: {}
+          ports:
+            - containerPort: 80

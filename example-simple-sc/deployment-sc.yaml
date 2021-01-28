@@ -1,0 +1,24 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: liberty-sc-deployment
+  labels:
+    app: liberty
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: liberty
+  template:
+    metadata:
+      labels:
+        app: liberty
+    spec:
+      containers:
+        - name: liberty
+          image: icr.io/ibm/liberty:kernel
+          securityContext:
+            capabilities:
+              add: [ "NET_ADMIN", "SYS_TIME" ]
+          ports:
+            - containerPort: 80
