@@ -1,5 +1,9 @@
 # SCC tutorial (draft)
 
+## Concepts
+
+Refer to the article and other links...
+
 ## Prerequisites
 
 TBD: Some of these may need to be explained. Ideally very little...
@@ -10,9 +14,19 @@ TBD: Some of these may need to be explained. Ideally very little...
 * Open a terminal
 * Create and/or switch to a project to work in
 
-## Concepts
+### Conventions
 
-Refer to the article and other links...
+Most of this tutorial will be run from a terminal command-line -- assuming bash or zsh (testing with zsh on MacOS).
+
+In some cases, we're using the `export` command to set environment variables that will be used in following examples. This allows you to choose a name, e.g. a project name, that is different than ours, set it once and use the environment variable in the examples to avoid copy/pasting the wrong name. Just set it and then make sure you are working in a shell where you set it.
+
+Before running the commands later in this tutorial, set your PROJECT, login with your credentials, and switch to the project using a terminal shell.
+
+```bash
+export PROJECT=your-project-name
+oc login <your-credentials>
+oc project $PROJECT
+```
 
 ## Creating and assigning a SecurityContextConstraint
 
@@ -141,6 +155,7 @@ Create our example SecurityContextContraint and assign it to a user.
     ```
 
     This attempt should fail with an error like the following.
+
     ```bash
     $ oc create -f scc-redis-pod.yaml --as=userzero
     Error from server (Forbidden): error when creating "scc-redis-pod.yaml": pods "scc-redis-pod-" is forbidden: unable to validate against any security context constraint: [fsGroup: Invalid value: []int64{5678}: 5678 is not an allowed group spec.containers[0].securityContext.securityContext.runAsUser: Invalid value: 1234: must be in the ranges: [1000650000, 1000659999] capabilities.add: Invalid value: "CHOWN": capability may not be added capabilities.add: Invalid value: "SETGID": capability may not be added]
@@ -220,6 +235,7 @@ We'll do the same test with a deployment config. The concept is the same, but th
           labels:
             name: scc-redis-dc
         spec:
+          serviceAccountName: default
           volumes:
             - name: redis-data
               emptyDir: {}
@@ -290,19 +306,31 @@ We'll do the same test with a deployment config. The concept is the same, but th
 
     We omitted some of the details, but what we really wanted to show is that we got back to our security context errors.
 
-    Delete that one and deploy again using the user with the custom SCC
+    You might expect that the next step is to run using *--as=user-scc* like we did earlier. It turns out that it would not help. We did not fail to create the deployment config, we failed when the replication controller tried to create the pod (like we did earlier). The replication controller is not using your "--as" user. It uses a service account and the default service account uses the restricted SCC.
+
+1. Use our custom SCC with a service account
+
+    Instead of modifying the project's default service account, we'll create a new one and add the SCC to it.  Notice the `-z` in the usage.
+
+    > Usage: oc adm policy add-scc-to-user SCC (USER | -z SERVICEACCOUNT) [USER ...] [flags]
+
+    Run the following commands to create the service account and add our existing SCC to it.
+
+    ```bash
+    oc create sa scc-tutorial-sa
+    oc adm policy add-scc-to-user scc-tutorial-scc -z scc-tutorial-sa
+    ```
+
+    Edit your **scc-redis-dc.yaml** and change the `ServiceAccountName`:
+
+    * From: `ServiceAccountName: default`
+    * To: `ServiceAccountName: scc-tutorial-sa`
+
+    Delete the failed deployment config and try again.
 
     ```bash
     oc delete dc/scc-redis-dc
-    oc create -f  dc5-redis.yaml  --as=user-scc
+    oc create -f scc-redis-dc.yaml --as=userzero 
     ```
 
-    Hmmmm.  Still fails.  This is probably where we need the SCC on the serviceacct.  That is a good thing!
-
-    Work-in-progress...
-
-### NEXT: App
-
-Can do the same thing with a custom python app.  It would pretty much just show what we did in the shell, but it would be more like a real use case (perhaps).  Also we only have id/group to demo now.  An app might be nice if we were doing more with capabilities.
-
-I have an app, coming soon...
+    This time the replication controller should successfully spin up a pod running redis.
