@@ -38,11 +38,19 @@ Here is an overview of how roles and SCCs are involved in the deployment process
 1. If the associated SCC can NOT provide all of the capabilities the pod requests, the cluster will not allow the pod to be deployed.
 1. Otherwise, the cluster will allow the pod to start and run the application.
 
-Now that we have a high-level view of how deployment security is handled on an OpenShift container platform, let's dig into the details.
+## Capabilities requested vs. capabilities allowed
 
-## Default SCCs (pre-defined??)
+In the flow diagram above, you see that the pod will only be deployed if the requested capabilites defined in the deployment manifest match the allowed capabilites defined by the SCC.
 
-Each Openshift cluster contains 8 default SCCs, each specifying a set of allowed capabilities:
+Another way to envision this relationship is to think of the SCC as a lock protecting system resources, and the manifest being the key. The app only gets access to the resources if the key fits.
+
+![capabilities](images/capabilities.png)
+
+Now that we have a high-level view of how deployment manifests work with SCCs on an OpenShift container platform, let's dig into the details.
+
+## Pre-defined SCCs
+
+Each Openshift cluster contains 8 pre-defined SCCs, each specifying a set of allowed capabilities:
 
 * **restricted** -  denies access to all host features and requires pods to be run with a user ID (UID), and SELinux context that are allocated to the namespace.
 * **anyuid** - same as restricted, but allows users to run with any UID and group ID (GID).
@@ -53,7 +61,7 @@ Each Openshift cluster contains 8 default SCCs, each specifying a set of allowed
 * **nonroot** - provides all features of the restricted SCC but allows users to run with any non-root UID.
 * **privileged** - allows access to all privileged and host features and the ability to run as any user, any group, any fsGroup, and with any SELinux context.
 
-SCCs can be assigned to specific RBAC roles created on the OpenShift platform. Users associated with those roles are then permitted to use the capabilites set by the SCC. If an SCC is not associated with an RBAC role, the **restricted** SCC is used.
+If not specified, the **restricted** SCC will be used.
 
 ## Managing SCCs
 
@@ -98,6 +106,8 @@ oc create -f my-scc.yaml
 ```
 
 ## Assign SCCs to RBAC roles
+
+SCCs can be assigned to specific RBAC roles created on the OpenShift platform. Users associated with those roles are then permitted to use the capabilites set by the SCC.
 
 On OpenShift, an administrator can create a **Role** with a rule to define which SCCs will be available for all the users associated with that role.
 
@@ -215,3 +225,18 @@ Add an SCC to all service accounts in a namespace:
 $ oc adm policy add-scc-to-group <scc_name> \
     system:serviceaccounts:<serviceaccount_namespace>
 ```
+
+## Capabilities matrix
+
+| SCC Capability | Description |
+| - | - |
+| allowedCapabilites | A list of capabilities that a pod can request. An empty list means that none of capabilities can be requested while the special symbol * allows any capabilities. |
+| defaultAddCapabilites | A list of additional capabilities that are added to any pod. |
+| fsGroup | Dictates the allowable values for the security context. |
+| groups | The groups that can access this SCC. |
+| requiredDropCapabilities | A list of capabilities that are be dropped from a pod. |
+| runAsUser | Dictates the allowable values for the Security Context. |
+| seLinuxContext | Dictates the allowable values for the Security Context. |
+| supplementalGroups | Dictates the allowable supplemental groups for the Security Context. |
+| users | The users who can access this SCC. |
+
