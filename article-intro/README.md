@@ -48,6 +48,10 @@ Another way to envision this relationship is to think of the SCC as a lock prote
 
 Now that we have a high-level view of how deployment manifests work with SCCs on an OpenShift container platform, let's dig into the details.
 
+## Capability types
+
+TODO - explain IDs vs access
+
 ## Pre-defined SCCs
 
 Each Openshift cluster contains 8 pre-defined SCCs, each specifying a set of allowed capabilities:
@@ -75,39 +79,87 @@ oc edit scc <scc name>
 oc delete scc <scc name>
 ```
 
+Here is a snippet of what the **restricted** SCC yaml looks like:
+
+```yaml
+oc get scc restricted  -o yaml
+...
+kind: SecurityContextConstraints
+apiVersion: security.openshift.io/v1
+metadata:
+  name: restricted
+fsGroup:
+  type: MustRunAs
+runAsUser:
+  type: MustRunAsRange
+seLinuxContext:
+  type: MustRunAs
+supplementalGroups:
+  type: RunAsAny
+allowedCapabilities: null
+defaultAddCapabilities: null  
+...
+```
+
+Here we show the fields used to define and limit the values specified by a deployment manifest - user and group IDs and SELinux options.
+
+**MustRunAs** and **MustRunAsRange** enforces the range of ID values that can be requested by a container, and also assigns a default value if needed.
+
+**RunAsAny** indicates that no range checking is performed and no default value is assigned, thus allowing any ID to be requested.
+
+## Creating custom SCCs
+
 When determining which SCC to assign, it is important to remember that less is better. If your pod requires capability A, don't select an SCC that provides capalities A, B, and C.
 
 If none of the default SCCs provide exactly what you are looking for, you can create a custom one. It requires you submit a YAML file, such as the following:
 
 ```yaml
+oc get scc my-custom-scc -o yaml
+...
 kind: SecurityContextConstraints
 apiVersion: v1
 metadata:
-  name: my-new-scc
-allowPrivilegedContainer: true
-runAsUser:
-  type: RunAsAny
-seLinuxContext:
-  type: RunAsAny
+  name: my-custom-scc
 fsGroup:
-  type: RunAsAny
+  type: MustRunAs 
+  ranges:
+  - min: 5000
+    max: 6000
+runAsUser:
+  type: MustRunAsRange 
+  uidRangeMin: 65534
+  uidRangeMax: 65634
+seLinuxContext: 
+  type: MustRunAs
+  SELinuxOptions: 
+    user: u0
+    role: r0
+    type: t0
+    level: l0
 supplementalGroups:
-  type: RunAsAny
-users:
-- my-admin-user
-groups:
-- my-admin-group
+  type: MustRunAs 
+  ranges:
+  - min: 3000
+    max: 4000
+defaultAddCapabilities:
+- CHOWN
+- SETGID
+- SETUID
+requiredDropCapabilities:
+- MKNOD
+- SYS_CHROOT    
+...
 ```
 
 Submit the SCC definition file using the `oc create` command:
 
 ```bash
-oc create -f my-scc.yaml
+oc create -f my-custom-scc.yaml
 ```
 
 ## Assign SCCs to RBAC roles
 
-SCCs can be assigned to specific RBAC roles created on the OpenShift platform. Users associated with those roles are then permitted to use the capabilites set by the SCC.
+So how is it determined which SCC is used when a deployment manifest is processed? One way is to create a service account and assign it to an RBAC role. The SCC can then be assigned to that role.
 
 On OpenShift, an administrator can create a **Role** with a rule to define which SCCs will be available for all the users associated with that role.
 
@@ -118,7 +170,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
 ...
-  name: test-role
+  name: my-custom-role
   namespace: my-namespace
 ...
 rules:
@@ -126,22 +178,25 @@ rules:
 - apiGroups:
   - security.openshift.io                       # location of SCCs
   resourceNames:
-  - my-new-scc                                  # SCC name
+  - my-custom-scc                               # SCC name
   resources:
   - securitycontextconstraints                  # indicates this is an SCC
   verbs:
-  - use                                         # "use" is only allowed action on an SCC
+  - use                                         # "use" is the only allowed action on an SCC
+  
 ```
 
 ## Deployment Manifests
 
-To deploy a pod, it must have a JSON or YAML file called a pod manifest.
+The final piece in the SCC security puzzle is the deployment manifest, which is used to deploy a pod.
+
+Here is a snippet of what a deployment manifiest yaml looks like:
 
 ```yaml
 apiVersion: v1
 kind: Pod
 metadata:
-  name: nginx-pod
+  name: my-test-pod
   labels:
     name: web-app
 spec:
@@ -166,11 +221,16 @@ spec:
 
 The `securityContext` object is used to request capabilities for both the pod and for all containers within in the pod. To be accepted, the capabilites must match what is allowed by the associated SCC.
 
+* **runAsUser: 1000** - requests that all containers in the pod will run as user ID 1000.
+* **runAsGroup: 3000** - request that all containers in the pod will run as group ID 3000.
+* **fsGroup: 2000** - requests that the owner for mounted volumes and files created in that volume will be set to GID 2000.
+* **capabilities** - requests that all containers in the pod can be allowed these capabilities.
+
 ## SCC Admission Process
 
-As shown in the workflow diagram above, when a user makes a pod request, OpenShift compares the capabilities requested by the pod against what the associated SCC allows.
+As described earlier, OpenShift compares the capabilities requested by the pod against what the associated SCC allows.
 
-When multiple SCCs are available to the user, OpenShift will prioritize them.
+But what happens when multiple SCCs are available? In this case, OpenShift will prioritize them.
 
 SCCs have a priority field that affects the ordering when a pod request is validated. A higher priority SCC is moved to the front of the set when sorting. When the complete set of available SCCs are determined they are ordered by:
 
@@ -178,13 +238,39 @@ SCCs have a priority field that affects the ordering when a pod request is valid
 * If priorities are equal, the SCCs will be sorted from most restrictive to least restrictive
 * If both priorities and restrictions are equal the SCCs will be sorted by name
 
-## Detailed Flow
+## Putting it all together
 
-Now that we have covered all of the details, we can update our initial flow diagram:
+Using the examples above, let's walk through the OpenShift SCC admission process to determine if our pod gets deployed or not.
 
-![detailed-flow](images/detailed-flow.png)
+First, we need to mention the OpenShift project yaml. The project plays a vital role as it provides default values when they are not specified in either the deployment manifest or SCC:
 
-## Misc notes
+```yaml
+oc get project default -o yaml 
+...
+apiVersion: project.openshift.io/v1
+kind: Project
+metadata:
+  name: default
+  annotations:
+    openshift.io/sa.scc.mcs: s0:c1,c0 
+    openshift.io/sa.scc.supplemental-groups: 1000000000/10000
+    openshift.io/sa.scc.uid-range: 1000000000/10000
+...
+```
+
+### Pod Vs. Restricted SCC
+
+This pod will fail due to requested user and group ID not being with the specified range.
+
+![pod-vs-restricted](images/pod-vs-restricted.png)
+
+### Pod Vs. Custom SCC
+
+This time the pod will pass.
+
+![pod-vs-custom](images/pod-vs-custom.png)
+
+## Misc notes - TODO
 
 Cover ## availablecapabilities/constraints (SELinuxpolicies,AppArmorprofiles,  etc.)
 
@@ -239,4 +325,119 @@ $ oc adm policy add-scc-to-group <scc_name> \
 | seLinuxContext | Dictates the allowable values for the Security Context. |
 | supplementalGroups | Dictates the allowable supplemental groups for the Security Context. |
 | users | The users who can access this SCC. |
+
+## Test
+
+Volume security - https://docs.openshift.com/enterprise/3.1/install_config/persistent_storage/pod_security_context.html
+
+### Project yaml
+
+```yaml
+oc get project default -o yaml 
+...
+apiVersion: project.openshift.io/v1
+kind: Project
+metadata:
+  name: default
+  annotations:
+    openshift.io/sa.scc.mcs: s0:c1,c0 
+    openshift.io/sa.scc.supplemental-groups: 1000000000/10000
+    openshift.io/sa.scc.uid-range: 1000000000/10000
+...
+```
+
+The annotations define default values for (in order) SELinux options, group IDs, and user IDs. These values are only used if the corresponding SCC strategy is NOT **RunAsAny**, AND when not specified in the SCC yaml or deployments yaml.
+
+### Restricted SCC yaml
+
+```yaml
+oc get scc restricted  -o yaml
+...
+fsGroup:
+  type: MustRunAs
+runAsUser:
+  type: MustRunAsRange
+seLinuxContext:
+  type: MustRunAs
+supplementalGroups:
+  type: RunAsAny
+...
+```
+
+This SCC is the most restrictive of the pre-defined SCCs that are provided with OpenShift.
+
+**fsGroup**: set to **MustRunAs**, which enforces group ID range checking and provides the container’s groups default. Since the range is omitted from the SCC, the default would be 1000000000 (derived from the project).
+
+>**NOTE**: The other supported type, **RunAsAny**, does not perform range checking, thus allowing any group ID, and produces no default groups.
+
+**runAsUser**: set to **MustRunAsRange**, which enforces user ID range checking and provides a UID default. Since the minimum and maximum range are omitted from the SCC, the default user ID would be 1000000000 (derived from the project).
+
+>**NOTE**: **MustRunAsNonRoot** and **RunAsAny** are *the other supported types.
+
+**seLinuxContext**: set to **MustRunAs**, which means the container is created with the SCC’s SELinux options, or the MCS default defined in the project.
+
+>**NOTE**: A type of **RunAsAny** indicates that SELinux context is not required, and, if not defined in the pod, is not set in the container.
+
+**supplementalGroup**: set to **RunAsAny**, which means no range checking is performed, thus allowing any group ID, and produces no default groups.
+
+### Custom SCC yaml
+
+```yaml
+oc get scc my-custom-scc -o yaml
+...
+fsGroup:
+  type: MustRunAs 
+  ranges:
+  - min: 5000
+    max: 6000
+runAsUser:
+  type: MustRunAsRange 
+  uidRangeMin: 65534
+  uidRangeMax: 65634
+seLinuxContext: 
+  type: MustRunAs
+  SELinuxOptions: 
+    user: u0
+    role: r0
+    type: t0
+    level: l0
+supplementalGroups:
+  type: MustRunAs 
+  ranges:
+  - min: 5000
+    max: 6000
+...
+```
+
+**fsGroup**: set to **MustRunAs**, which enforces group ID range checking and provides the container’s groups default. Based on this SCC definition, the default is 5000 (the minimum ID value). The other supported type, **RunAsAny**, does not perform range checking, thus allowing any group ID, and produces no default groups.
+
+**runAsUser**: set to **MustRunAsRange**, which enforces user ID range checking and provides a UID default. Based on this SCC, the default UID is 65534 (the minimum value). The range of allowed IDs can be defined to include any user IDs required for the target storage.
+
+**seLinuxContext**: set to **MustRunAs**, which means the container is created with the SCC’s SELinux options, or the MCS default defined in the project. In this case, we have defined the SELinux user name, role name, type, and levels.
+
+### Pod yaml
+
+```yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nginx-pod
+  labels:
+    name: web-app
+spec:
+  securityContext:
+    runAsUser: 65534
+    runAsGroup: 3000
+    fsGroup: 5000
+...
+```
+
+### Results
+
+| Test | Restricted SCC | Custom SCC
+| - | - | - |
+| fsGroup | **FAIL** - 2000 does not fall within range specified by project | **PASS** - 2000 falls within range 5000-6000 allowed by SCC |
+| runAsUser | **FAIL** - 65534 does not fall within range specified by project | **PASS** - 65534 falls within range 65534-65634 allowed by SCC|
+| seLinuxContext | **PASS** - will assign value "s0:c1,c0"  | **PASS** - will assign value "u0:r0:t0:l0" |
+| supplementalGroups | **PASS** | **PASS** |
 
