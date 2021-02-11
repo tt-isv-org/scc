@@ -1,42 +1,52 @@
-# OpenShift Security Practices using SCC
+# Red Hat OpenShift security practices using security context contraints
 
-To better understand how both Role-Based Access Control (**RBAC**) and Security Context Contraints (**SCC**) are used to control access on an OpenShift Container Platform, let's walk-through a common deployment scenario.
+To better understand how Security Context Contraints (**SCC**) are used to control access on a Red Hat OpenShift Container Platform, let's walk-through a common deployment scenario.
 
-First, let's identify the personas that are typically involved in the process of developing an application, configuring a pod to contain the application, and then deploying that pod on an OpenShift Container Platform.
+First, let's identify the personas that are typically involved in the process of developing an application, configuring a pod to contain the application, and then deploying that application on OpenShift.
 
-* **Programmer** - responsible for developing the app or service that will run in the pod.
-* **Deployer** - responsible for creating the deployment manifest that will define how the pod will be deployed and run.
+* **Programmer** - responsible for developing the application or service that will run in the pod.
+* **Deployer** - responsible for creating the deployment manifest that will define how the application will be run.
 * **OpenShift User** - a user account granted deployment permissions by the OpenShift administrator.
-* **OpenShift Service Account** - created to be associated with SCC capabilities.
-* **Administrator** - ensures the security of the OpenShift platform by granting access to protected resources only as needed.
+* **OpenShift Service Account** - created to be associated with one or more SCCs.
+* **OpenShift Administrator** - ensures the security of the OpenShift platform by granting access to protected resources only as needed.
 
-Administrators use **RBAC** resources to control user access. In our example, the administrator will grant the "deployer" the permission to deploy pods. We won't worry about permissions for the "programmer" since they don't typically need access to the cluster.
+Administrators use Role-Based Access Control (**RBAC**) resources to control user access. In our scenario, the administrator will create an **OpenShift User** account that has the permission to deploy pods. The **Deployer** can then use that account to create and deploy the pod on OpenShift. The **Deployer** performs this task by creating a deployment manifest, which links to the application and provides instructions on how the application should be deployed and ran.
 
-If the application is a typical stateless workload, the "deployer" will generate a basic deployment manifest, and the pod will be deployed without any issues.
+If the application is a typical stateless workload (i.e. requiring no special permissions), the **Deployer** will generate a basic deployment manifest, and the pod will be deployed without any issues.
 
-But what if the application requires access to protected resources such as local storage, networking services, or user/group identities **[SITE BETTER/CLEARER USE CASES]**? This will require that the "deployer" specifies in the manifest for the pod to request protected capabilities. Then how does the cluster decide whether or not to grant the pod the capabilities it requests? This is where SCCs come into play.
+But what if the application requires access to protected resources such as local storage, networking services, or needs to run under specific user or group identities? In this case the **Deployer** will need to enhance the deployment manifest to request the additional privileges. And who gets to decide if the requests should be allowed or not? This is where SCCs and RBAC come into play.
 
-SCCs are associated with users, groups, and/or service accounts, typically via RBAC roles. When a pod is deployed, the SCCs associated with the user or service account that owns the pod (typically the one used to deploy the pod) specify which protected resources the pod can access. If the SCCs allow all of the capabilities that the pod requests, the pod is allowed to start running; otherwise, starting the pod fails.
+The SCC specifies what privileges are allowed, what user and group IDs can be assigned, and what additional capabilities can be granted. SCCs are associated with users, groups, and/or service accounts - typically via RBAC roles. Therefore, when the **Deployer** attempts to deploy the pod, the SCC invoked is the one associated with the role assigned to the **OpenShift User** account.
 
-If the pod is denied the requested capabilities, the "administrator" will need to:
+>**NOTE**: Another way to associate a deployment manifest with an SCC is by specifying an **OpenShift Service Account** name in the manifest. This will be discussed later in the article.
 
-* determine that the requested capabilities in the manifest are in fact needed.
-* determine what SCC will allow the requested capabilities, or if none exist, create a new one.
-* assign the SCC to a role for the appropriate users, groups, and/or service accounts, or create such a role if needed.
-* assign the "deployer" to this new role.
+If the SCC allows all of the requested capabilities made by the deployment manifest, the deployment is created and the pod/application is run.
 
-Here is an overview of how roles and SCCs are involved in the deployment process:
+>**NOTE**: As mentioned previously, there are multiple ways that a deployment manifest can request additional privileges, access, and capabilities. Throughout this article we will refer to all these request types collectively as simply "capabilities".
+
+If the pod is denied the requested capabilities, the **OpenShift Administrator** will need to:
+
+* Determine if the additional requests made in the manifest are in fact needed.
+* Determine what SCC will allow the requested capabilities, or if none exist, create a new one.
+* Assign the SCC to a role for the appropriate users, groups, and/or service accounts, or create such a role if needed.
+* Assign the new role to the **OpenShift User** account.
+
+Here is an overview of how user and service accounts, roles, and SCCs are involved in the deployment process:
 
 ![flow](images/flow.png)
 
-1. External to the OpenShift container platform, the **Programmer** develops an application or service, and ...
-1. Delivers the application to the **Deployer**, who creates a pod deployment manifest for the application.
-1. Internal to the OpenShift container platform, The **RBAC/Cluster Administrator** creates roles which are assigned a security context constraint.
-1. The **RBAC/Cluster Administrator** creates an **OpensShift User Account** and assigns it a role that provides deployment permissions. Also created is an **OpenShift Service Account**. Both have roles that point to one or more SCCs.
-1. The **Deployer** logs into OpenShift using the new user account, and deploys the application using the deployment manifest. The manifest may contain a request for additional capabilities, and may reference which service account to use when deploying the pod.
-1. OpenShift processes the manifest and deploys the pod. The deployment process will compare the capabilites requested by the pod against the capabilites allowed by the SCC that is associated with the referenced **OpenShift Service Account**.
-1. If the associated SCC can NOT provide all of the capabilities the pod requests, the cluster will not allow the pod to be deployed.
-1. Otherwise, the cluster will allow the pod to start and run the application.
+1. The **Programmer** develops an application or service, and ...
+1. Delivers the application to the **Deployer**, who creates a deployment manifest for the application.
+1. The **OpenShift Administrator** creates roles which are assigned a security context constraint.
+1. The **OpenShift Administrator** creates an **OpenShift User Account** and assigns it a role that provides deployment permissions. Also created is an **OpenShift Service Account** that is associated with one or more SCCs.
+1. The **Deployer** logs into OpenShift using the new **OpenShift User Account**, and deploys the application using the deployment manifest. The manifest may contain a request for additional capabilities, and may reference which **OpenShift Service Account** to use when deploying the pod.
+1. OpenShift processes the manifest and attempts to deploy the pod. The deployment process will compare the capabilities requested by the deployment manifest against the capabilities allowed by the associated SCCs.
+1. If the associated SCC cannot provide all of the capabilities the deployment manifest requests, the deployment will fail.
+1. Otherwise, the deployment will create the pod and run the application.
+
+TODO: do we need more detail on the actual deployment? what actually fails - deployment, pod creation, pod starting...
+
+Now that we have a high-level view of how deployment manifests work with SCCs on an OpenShift container platform, let's dig into the details.
 
 ## Capabilities requested vs. capabilities allowed
 
@@ -46,11 +56,58 @@ Another way to envision this relationship is to think of the SCC as a lock prote
 
 ![capabilities](images/capabilities.png)
 
-Now that we have a high-level view of how deployment manifests work with SCCs on an OpenShift container platform, let's dig into the details.
-
 ## Capability types
 
-TODO - explain IDs vs access
+Up to this point we have used the generic term "capabilities" to describe all the permissions that are secured by SCCs. In reality, "capabilites" consist of 3 specific types - privileges, access, and capabilities. Each with its own set of rules and syntax.
+
+### Privileges  
+
+* allowPrivilegedContainer - can a pod run privileged containers
+* allowHostDirVolumePlugin
+
+### Access
+
+Controls what specific user or group ID a pod may run as.
+
+In the SCC, The list of fields that can be set include:
+  
+* **RunAsUser** - specifies the allowable range of user IDs used for running all the containers in the pod.
+* **SupplementalGroups** - specifies the allowable range of group IDs used for rulling all the containers in the pod.
+* **FSGroup** -  specifies the allowable range of group IDs used for controlling pod storage volumes.
+* **SELinuxContext** - specifies the allowable values used for setting SELinux user, role, type and level.
+
+In the deployment manifest, these values are set at the pod level and pertain to all containers running within the pod. The fields used are:
+
+* **securityContext.runAsUser**
+* **securityContext.runAsGroup**
+* **securityContext.fsGroup**
+* **securityContext.XXXXXX**
+
+### Capabilities
+
+Permission to perform specific actions, like access system time, or configure network settings. These capabilities are assigned to individual containers running within the pod. 
+
+The list of actions includes:
+
+* CHOWN - change file ownership and group ownership
+* KILL - can send signal to process without having matching user ID
+* NET_BROADCAST - can broadcast and listening to multicast
+* NET_ADMIN - can configure interfaces, routing tables, multicast, admin of IP firewall, etc.
+* SYS_CHROOT - can use chroot command
+* SYS_ADMIN - can set domain and host names, run mount and unmount, lock/unlock shared memory, etc.
+* SYS_TIME - can manipulate system clock
+* MKNOD - provides privileged aspects of mknod()
+* SETCAP - can set or remove capabilities on files 
+
+A full list of values can be found [here](https://github.com/torvalds/linux/blob/master/include/uapi/linux/capability.h)
+
+Capabilities are specified in the SCC using the following fields:
+
+* **defaultAddCapabilities** - list of default capabilities added to each container.
+* **requiredDropCapabilities** - list of capabilities that will be forbidden to run on each container.
+* **allowedCapabilities** - list of container capabilities that are allowed to be requested by the demployment manifest.
+
+Capabilities are requested in the deployment manifest using the **securityContext.capabilities.add** field.
 
 ## Pre-defined SCCs
 
@@ -123,12 +180,12 @@ metadata:
 fsGroup:
   type: MustRunAs 
   ranges:
-  - min: 5000
-    max: 6000
+  - min: 2000
+    max: 3000
 runAsUser:
   type: MustRunAsRange 
-  uidRangeMin: 65534
-  uidRangeMax: 65634
+  uidRangeMin: 1000
+  uidRangeMax: 2000
 seLinuxContext: 
   type: MustRunAs
   SELinuxOptions: 
@@ -143,11 +200,11 @@ supplementalGroups:
     max: 4000
 defaultAddCapabilities:
 - CHOWN
-- SETGID
-- SETUID
+- SYS_TIME
 requiredDropCapabilities:
 - MKNOD
-- SYS_CHROOT    
+allowedCapabilites:
+- NET_ADMIN   
 ...
 ```
 
@@ -157,7 +214,9 @@ Submit the SCC definition file using the `oc create` command:
 oc create -f my-custom-scc.yaml
 ```
 
-## Assign SCCs to RBAC roles
+## Ways to associate an SCC with a deployment manifest
+
+### Assign SCCs to RBAC roles
 
 So how is it determined which SCC is used when a deployment manifest is processed? One way is to create a service account and assign it to an RBAC role. The SCC can then be assigned to that role.
 
@@ -186,45 +245,79 @@ rules:
   
 ```
 
+### Assign user or service accounts to an SCC
+
+Here are the commands to create a service account, then assign it to our custom SCC:
+
+```bash
+oc create sa my-service-account
+oc adm policy add-scc-to-user my-custom-scc -z my-service-account
+```
+
+This will update the SCC to include a list of assigned users:
+
+```yaml
+oc get scc my-custom-scc -o yaml
+...
+kind: SecurityContextConstraints
+apiVersion: v1
+metadata:
+  name: my-custom-scc
+users:
+- my-service-acount
+...
+```
+
 ## Deployment Manifests
 
-The final piece in the SCC security puzzle is the deployment manifest, which is used to deploy a pod.
+The final piece in the SCC security puzzle is the deployment manifest, which is used to create and build a deployment, which can be then used to deploy a pod.
 
 Here is a snippet of what a deployment manifiest yaml looks like:
 
 ```yaml
-apiVersion: v1
-kind: Pod
+apiVersion: apps/v1
+kind: Deployment
 metadata:
-  name: my-test-pod
+  name: my-test-deployment
   labels:
-    name: web-app
+    app: my-app
 spec:
-  securityContext:                         # Pod security
-    runAsUser: 1000
-    runAsGroup: 3000
-    fsGroup: 2000
-  containers:
-  - name: web-app-container
-    image: nginx
-    securityContext:                       # Container security
-      capabilities:
-        add: ["NET_ADMIN", "SYS_TIME"]
-    resources:
-      limits:
-        memory: "128Mi"
-        cpu: "500m"
-    ports:
-      - containerPort: 80
+  replicas: 3
+  selector:
+    matchLabels:
+      app: my-app
+  template:
+    metadata:
+      labels:
+        app: my-app
+    spec:
+      serviceAccountName: my-custom-account
+      securityContext:
+        runAsUser: 1000
+        runAsGroup: 3000
+        fsGroup: 2000
+      containers:
+      - name: web-app-container
+        image: nginx:1.14.2
+        securityContext:
+          capabilities:
+            add: ["NET_ADMIN", "SYS_TIME"]
+        ports:
+        - containerPort: 80
 ...
 ```
 
 The `securityContext` object is used to request capabilities for both the pod and for all containers within in the pod. To be accepted, the capabilites must match what is allowed by the associated SCC.
 
+The first set of `securityContext` values are associated with the pod. The entries relate to what ID values are to be assigned to all containers running in the pod. For example,
+
 * **runAsUser: 1000** - requests that all containers in the pod will run as user ID 1000.
 * **runAsGroup: 3000** - request that all containers in the pod will run as group ID 3000.
 * **fsGroup: 2000** - requests that the owner for mounted volumes and files created in that volume will be set to GID 2000.
-* **capabilities** - requests that all containers in the pod can be allowed these capabilities.
+
+The second set of `securityContext` values are associated with specific containers running inside the pod. For example:
+
+* **capabilities - add** - requests that the `web-app-containter` container be allowed the `NET_ADMIN` and `SYS_TIME` capabilities .
 
 ## SCC Admission Process
 
@@ -237,6 +330,9 @@ SCCs have a priority field that affects the ordering when a pod request is valid
 * Highest priority first, nil is considered a 0 priority
 * If priorities are equal, the SCCs will be sorted from most restrictive to least restrictive
 * If both priorities and restrictions are equal the SCCs will be sorted by name
+
+TODO: show deployment yaml after deployment to see which SCC was used
+TODO: add more detail. Are the SCCs merged? What if one SCC allows, but is lower priority of another SCC that fails?
 
 ## Putting it all together
 
@@ -258,19 +354,26 @@ metadata:
 ...
 ```
 
-### Pod Vs. Restricted SCC
+Note that the following examples may refer back to this project yaml for default values.
 
-This pod will fail due to requested user and group ID not being with the specified range.
+### Deployment Vs. Restricted SCC
+
+Let's check how our deployment manifest will fare against the **restricted** SCC.
 
 ![pod-vs-restricted](images/pod-vs-restricted.png)
 
-### Pod Vs. Custom SCC
+![pod-vs-restricted-text](images/pod-vs-restricted-text.png)
 
-This time the pod will pass.
+### Deployment Vs. Custom SCC
+
+Now let's try it against our **custom** SCC.
 
 ![pod-vs-custom](images/pod-vs-custom.png)
 
-## Misc notes - TODO
+![pod-vs-custom-text](images/pod-vs-custom-text.png)
+
+## Misc notes - TODO  *** **IGNORE FOLLOWING TEXT** ****
+
 
 Cover ## availablecapabilities/constraints (SELinuxpolicies,AppArmorprofiles,  etc.)
 
@@ -291,7 +394,11 @@ To allow an application to be run as any user ID, including the root user ID, yo
 runAsUser: 1000 - means all containers in the pod will run as user UID 1000
 fsGroup: 2000 - means the owner for mounted volumes and files created in that volume will be GID 2000
 
-Capability values: https://github.com/torvalds/linux/blob/master/include/uapi/linux/capability.h
+
+
+
+
+
 
 ### SCC yaml
 
