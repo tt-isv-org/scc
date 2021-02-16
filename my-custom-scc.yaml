@@ -1,0 +1,27 @@
+kind: SecurityContextConstraints
+apiVersion: v1
+metadata:
+  name: my-custom-scc
+runAsUser:
+  type: MustRunAsRange 
+  uidRangeMin: 1000
+  uidRangeMax: 2000
+seLinuxContext:
+  type: RunAsAny
+fsGroup:
+  type: MustRunAs 
+  ranges:
+  - min: 5000
+    max: 6000
+supplementalGroups:
+  type: MustRunAs 
+  ranges:
+  - min: 5000
+    max: 6000
+defaultAddCapabilities:
+- SYS_TIME
+- SETGID
+- SETUID
+requiredDropCapabilities:
+- KILL
+- MKNOD

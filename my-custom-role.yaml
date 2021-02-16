@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Role
+metadata:
+  name: my-custom-role
+rules:
+- apiGroups:
+  -  security.openshift.io
+  resourceNames:
+  - my-custom-scc
+  resources:
+  - securitycontextconstraints
+  verbs:
+  - use
+
+
+
