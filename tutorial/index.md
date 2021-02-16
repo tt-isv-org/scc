@@ -37,6 +37,8 @@ Most of this tutorial will be run from a terminal command-line -- assuming bash 
 
 We're using the `export` command to set environment variables that will be used in following examples. This allows you to choose names (i.e. a project name and application name) that are different than ours, set them in your environment, and use them in the rest of the commands to avoid copy/pasting the wrong names. Make sure you are always working in a shell where you set them.
 
+We are using YAML templates to allow these environment variables to be set when you run our example commands to create resources. You will copy our YAML to a file and run the `oc process` command. By using templates, we can pass in parameters instead of requiring you to edit the YAML file (e.g. no need to edit a hard-coded project name).
+
 ### Start in a terminal
 
 Before running the commands later in this tutorial, use your terminal shell to:
@@ -51,7 +53,6 @@ export PROJECT=your-project-name
 oc project $PROJECT
 ```
 
-We are using YAML templates to allow these environment variables to be set when you run our example commands to create resources. You will copy our YAML to a file and run the `oc process` command. By using templates, we can pass in parameters instead of requiring you to edit the YAML file (e.g. no need to edit a hard-coded project name).
 
 ## Step 1. Create the test application showing errors due to lack of privileges
 
@@ -60,7 +61,7 @@ We are using YAML templates to allow these environment variables to be set when 
 Run the following commands to build an image from our git repo and deploy the demo app. The app is a simple Python app that we will use in this tutorial.
 
 ```bash
-oc new-app python~https://github.com/markstur/scc-tutorial-assets --context-dir=examples/mod-wsgi-test-app 
+oc new-app https://github.com/markstur/scc-tutorial --context-dir=mod-wsgi-test-app --name=scc-python --image-stream="openshift/python:latest"
 ```
 
 > NOTE: Add the *--as-test=true* option if you'd prefer to skip the deployment of the app. That will build the image we need in the later examples where we use a security context and you can skip ahead without these baseline results.
@@ -76,13 +77,13 @@ This command results in:
 To create a route based on the service so that you can try the app, run:
 
 ```bash
-oc expose service scc-tutorial-assets
+oc expose svc/scc-python
 ```
 
 Use the following command to get the HOST/PORT to access the application's web page:
 
 ```bash
-oc get route/scc-tutorial-assets
+oc get route/scc-python
 ```
 
 ### Using the application
@@ -102,7 +103,7 @@ This application will run successfully with an empty security context, but it wi
 After you hit the web page URL, you can also check the pod logs with the following command:
 
 ```bash
-oc logs svc/scc-tutorial-assets
+oc logs svc/scc-python
 ```
 
 If you prefer to use the web console:
@@ -111,7 +112,7 @@ If you prefer to use the web console:
 
 1. Use the pulldown on the left to select the `Developer` view.
 1. Click on `Topology`.
-1. Click on the application named `scc-tutorial-assets`. The right sidebar will slide out. It shows you how to `View logs` for the pods and provides a link for the service route.
+1. Click on the application named `scc-python`. The right sidebar will slide out. It shows you how to `View logs` for the pods and provides a link for the service route.
 1. Click on the route link.
     * TIP: There is an `Open URL` glyph attached to the application on the Topology canvas that you can also use to browse to the route.
 1. Go back to the sidebar and click on `View logs` to see where an app would really show you warnings, errors, and info.
@@ -130,7 +131,7 @@ If you view the pod log, you'll see that the *ERROR* and *INFO* messages are wri
 
 ![new_app_log.png](images/new_app_log.png)
 
-## Step 1. Attempt to redeploy the application with a security context
+## Step 2. Attempt to redeploy the application with a security context
 
 Since the application is intended to run with a specific user ID and other restricted capabilities, we really should use a `securityContext` to request those capabilities.
 
@@ -154,7 +155,7 @@ This YAML will deploy the same application, but this time we are requesting some
     - kind: Deployment
       apiVersion: apps/v1
       metadata:
-        name: ${APP}-deployment
+        name: ${APP}
       spec:
         selector:
           matchLabels:
@@ -165,7 +166,7 @@ This YAML will deploy the same application, but this time we are requesting some
               app: ${APP}
           spec:
             containers:
-            - image: image-registry.openshift-image-registry.svc:5000/${PROJECT}/scc-tutorial-assets:latest
+            - image: image-registry.openshift-image-registry.svc:5000/${PROJECT}/scc-python:latest
               name: ${APP}-container
               ports:
               - containerPort: 8080
@@ -174,13 +175,13 @@ This YAML will deploy the same application, but this time we are requesting some
               securityContext:
                 capabilities:
                   add:
-                  - CHOWN
+                  - SYS_TIME
+                  - SETUID
                   - SETGID
                   drop:
-                  - SETUID
                   - KILL
                   - MKNOD
-                privileged: false
+                privileged: true
                 runAsUser: 1234
               volumeMounts:
               - mountPath: /var/opt/app-root/src/data
@@ -221,7 +222,9 @@ This YAML will deploy the same application, but this time we are requesting some
     The output should show a ReplicaFailure:
 
     ```bash
-    $ oc describe deployment
+    $ oc describe deployment/$APP
+    [ ... ]
+    Replicas:               1 desired | 0 updated | 0 total | 0 available | 1 unavailable
     [ ... ]
     Conditions:
       Type             Status  Reason
@@ -230,26 +233,26 @@ This YAML will deploy the same application, but this time we are requesting some
       Available        False   MinimumReplicasUnavailable
       ReplicaFailure   True    FailedCreate
     OldReplicaSets:    <none>
-    NewReplicaSet:     scctest1-deployment-697fd459b4 (0/1 replicas created)
+    NewReplicaSet:     your-app-6fc6889db7 (0/1 replicas created)
     Events:
       Type    Reason             Age   From                   Message
       ----    ------             ----  ----                   -------
-      Normal  ScalingReplicaSet  3m    deployment-controller  Scaled up replica set scctest1-deployment-697fd459b4 to 1
+      Normal  ScalingReplicaSet  11s   deployment-controller  Scaled up replica set your-app-6fc6889db7 to 1
     ```
 
     To get a more specific reason for the replica set failure. Use `oc get events`:
 
     ```bash
     $ oc get events | grep $APP
-    51s         Warning   FailedCreate        replicaset/scctest-74f6895984                 Error creating: pods "scctest-74f6895984-" is forbidden: unable to validate against any security context constraint: [fsGroup: Invalid value: []int64{5678}: 5678 is not an allowed group spec.containers[0].securityContext.securityContext.runAsUser: Invalid value: 1234: must be in the ranges: [1000650000, 1000659999] capabilities.add: Invalid value: "SETGID": capability may not be added capabilities.add: Invalid value: "SETUID": capability may not be added capabilities.add: Invalid value: "SYS_TIME": capability may not be added]
+    107s        Warning   FailedCreate        replicaset/your-app-6fc6889db7       Error creating: pods "your-app-6fc6889db7-" is forbidden: unable to validate against any security context constraint: [fsGroup: Invalid value: []int64{5678}: 5678 is not an allowed group spec.containers[0].securityContext.securityContext.runAsUser: Invalid value: 1234: must be in the ranges: [1000620000, 1000629999] spec.containers[0].securityContext.privileged: Invalid value: true: Privileged containers are not allowed capabilities.add: Invalid value: "SETGID": capability may not be added capabilities.add: Invalid value: "SETUID": capability may not be added capabilities.add: Invalid value: "SYS_TIME": capability may not be added]
     [...]
     ```
 
-    We omitted some of the details, but what we really wanted to show is that we got back to our security context errors.
+    The `FailedCreate` warning clearly shows that we got **security context constraint** validation errors.
 
-    We did not fail to create the deployment, we failed when the replica set tried to create the pod. The replica set uses a service account and the default service account uses the restricted SCC.
+    We did not fail to create the deployment, we failed when the replica set tried to validate the security constraints and create the pod. The replica set uses a service account and the default service account uses the restricted SCC.
 
-    These errors are expected because the deployment asked for specific capabilities, but the default service account is restricted and cannot provide these capabilities. So, instead of deploying an application that will produce errors, we made it fail earlier with specific reasons.
+    These errors are expected because the deployment asked for specific permissions, and the restricted SCC will not allow these permissions. So, instead of deploying an application that will produce errors, we made it fail earlier with reasons. Failing early is definitely a good thing. The other thing we accomplished by clearly indicating the special permissions needed by this application, is that we created a way for the developer, the deployer, and the security administrator to communicate better.
 
     Don't delete this deployment. We'll fix this in the next section.
 
@@ -263,8 +266,8 @@ This YAML will deploy the same application, but this time we are requesting some
     kind: SecurityContextConstraints
     apiVersion: v1
     metadata:
-      name: scc-tutorial-scc3
-    allowPrivilegedContainer: false
+      name: scc-tutorial-scc
+    allowPrivilegedContainer: true
     runAsUser:
       type: MustRunAsRange 
       uidRangeMin: 1000
@@ -321,20 +324,41 @@ This YAML will deploy the same application, but this time we are requesting some
 
     Now replication set should successfully spin up a pod running the application.
 
-1. See the working application as proof
-    Run the following commands to make your app available.
+1. Run the following commands to give your application a service and a route.
 
     ```bash
     oc expose deployment/$APP
     oc expose svc/$APP
     ```
 
-    See the success message on the applications web page:
+1. Hit your new application's web page and see the results.
 
+    ![fixed_app_winning.png](images/fixed_app_winning.png)
 
 ## What did we learn?
 
-Bueller? Bueller?
+1. We used a security context to indicate that our application is requesting permission to:
+
+    * Run as user ID 1234
+    * Run as "privileged" to allow changing the system clock!!!
+    * Use fsGroup 5678 to allow read/write on a volume
+    * Use supplemental group 5656 and test changing the file ownership
+    <!-- 
+    * Run as a group ID 5678
+    * Use setuid to run a program as another user
+    -->
+
+1. We allowed security context constraint validation to fail using the default service account and restricted SCC.
+
+1. We created an SCC with the permissions we needed.
+
+1. We created a service account and assigned the SCC to it
+
+1. We patched our deployment to use this service account.
+
+1. This fixed the application to allow it to run.
+
+1. We hit its test page, and instead of getting errors, it passed all its tests.
 
 ## Deleting resources
 
