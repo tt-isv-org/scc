@@ -1,22 +1,18 @@
-# SCC tutorial (draft)
+# SCC tutorial (work-in-progress)
 
-In this tutorial, you will get hands-on experience with OpenShift security context constraints. You will:
+> TODO: The official tutorial title is TBD
 
-1. Create the test application showing errors due to lack of privileges
-    * Ensures you have a working environment
-    * Creates the base image that will be used througout the tutorial
-    * Provides a baseline to demonstrate the effect of security contexts and security context constraints
-1. Attempt to redeploy the application with a security context
-    * Demonstrates how an application deployment requesting special privileges in the security context is expected to fail when those privileges are restricted
-1. Create and assign a security context constraint
-    * Shows how to create an SCC granting special privileges
-    * Shows how to add an SCC to a service account
-1. Patch the deployment to use your new service account (and SCC!)
-    * Proves that restricted capabilities can be added (and dropped)
-    * Demonstrates how you can control your runtime user and groups
-    * Shows how volume access uses predefined group IDs
+This tutorial will give you hands-on experience using security context controls (SCCs) with OpenShift. A variety of scenarios are used to demonstrate several of the many possibilities. Each scenario is intended to work independently of the others. We recommend trying them (or at least reading them) in order, but you can skip ahead and try the scenario that is most applicable to your use case. After you follow our script, going off-script to experiment and learn on your own is highly encouraged.
 
-> TODO: Probably a "flow diagram" type graphic to introduce this
+## Scenarios
+
+1. [A simple default deployment (restricted)](#-Scenario-1:-A-simple-default-deployment-(restricted))
+1. Running as root vs privileged vs non-privileged
+1. User and group access controls with volumes
+1. Add/drop Linux capabilities for finer control
+1. SELinux
+1. AppArmor
+
 ## Concepts
 
 Summarize and refer to the article and other links...
@@ -53,10 +49,33 @@ export PROJECT=your-project-name
 oc project $PROJECT
 ```
 
+## Scenario 1: A simple default deployment (restricted)
 
-## Step 1. Create the test application showing errors due to lack of privileges
+## Scenario 2: Running as root vs privileged vs non-privileged
 
-### Creating the demo app with `oc new-app`
+## Scenario 3: User and group access controls with volumes
+
+In this scenario, you will:
+
+1. Create the test application showing errors due to lack of privileges
+    * Ensures you have a working environment
+    * Creates the base image that will be used througout the tutorial
+    * Provides a baseline to demonstrate the effect of security contexts and security context constraints
+1. Attempt to redeploy the application with a security context
+    * Demonstrates how an application deployment requesting special privileges in the security context is expected to fail when those privileges are restricted
+1. Create and assign a security context constraint
+    * Shows how to create an SCC granting special privileges
+    * Shows how to add an SCC to a service account
+1. Patch the deployment to use your new service account (and SCC!)
+    * Proves that restricted capabilities can be added (and dropped)
+    * Demonstrates how you can control your runtime user and groups
+    * Shows how volume access uses predefined group IDs
+
+> TODO: Probably a "flow diagram" type graphic to introduce this
+
+### Step 1. Create the test application showing errors due to lack of privileges
+
+#### Creating the demo app with `oc new-app`
 
 Run the following commands to build an image from our git repo and deploy the demo app. The app is a simple Python app that we will use in this tutorial.
 
@@ -72,7 +91,7 @@ This command results in:
 2. Deploying a pod which runs the application in a container.
 3. Creating a service named **scc-tutorial-assets**.
 
-### Exposing a route
+#### Exposing a route
 
 To create a route based on the service so that you can try the app, run:
 
@@ -86,7 +105,7 @@ Use the following command to get the HOST/PORT to access the application's web p
 oc get route/scc-python
 ```
 
-### Using the application
+#### Using the application
 
 The application is a Python WSGI Flask application. It uses a minimal amount of code to run some tests and report the results on its default web page. It also logs the results, so you can check the service logs or pod logs.
 
@@ -117,7 +136,7 @@ If you prefer to use the web console:
     * TIP: There is an `Open URL` glyph attached to the application on the Topology canvas that you can also use to browse to the route.
 1. Go back to the sidebar and click on `View logs` to see where an app would really show you warnings, errors, and info.
 
-### What to expect
+#### What to expect
 
 You should have successfully deployed an application from our source code, exposed a public service route, browsed to its web page, and found the pod logs.
 
@@ -131,7 +150,7 @@ If you view the pod log, you'll see that the *ERROR* and *INFO* messages are wri
 
 ![new_app_log.png](images/new_app_log.png)
 
-## Step 2. Attempt to redeploy the application with a security context
+### Step 2. Attempt to redeploy the application with a security context
 
 Since the application is intended to run with a specific user ID and other restricted capabilities, we really should use a `securityContext` to request those capabilities.
 
@@ -142,7 +161,7 @@ This YAML will deploy the same application, but this time we are requesting some
 * Add capabilities: CHOWN and SETGID
 * Drop capabilities: SETUID, KILL, MKNOD
 
-### Deploying the application with security context settings
+#### Deploying the application with security context settings
 
 1. Copy (or download) this scc-template.yaml file.
 
@@ -256,9 +275,9 @@ This YAML will deploy the same application, but this time we are requesting some
 
     Don't delete this deployment. We'll fix this in the next section.
 
-## Step 3. Create and assign a security context constraint
+### Step 3. Create and assign a security context constraint
 
-### Create our SCC with the capabilities we will need
+#### Create our SCC with the capabilities we will need
 
 1. Save this YAML to a file named scc-tutorial-scc.yaml.
 
@@ -314,7 +333,7 @@ This YAML will deploy the same application, but this time we are requesting some
     oc adm policy add-scc-to-user scc-tutorial-scc -z scc-tutorial-sa
     ```
 
-## Step 4: Patch the deployment to use your new SCC
+### Step 4: Patch the deployment to use your new SCC
 
 1. Patch the deployment to use our new custom service account with the following command:
 
@@ -335,7 +354,7 @@ This YAML will deploy the same application, but this time we are requesting some
 
     ![fixed_app_winning.png](images/fixed_app_winning.png)
 
-## What did we learn?
+### What did we learn?
 
 1. We used a security context to indicate that our application is requesting permission to:
 
