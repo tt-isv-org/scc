@@ -230,40 +230,40 @@ You can also view the SCC with the `describe` command:
 
 ```bash
 $ oc describe scc/my-custom-scc
-Name:					      	my-custom-scc
-Priority:					    <none>
+Name:                           my-custom-scc
+Priority:                       <none>
 Access:
-  Users:					    <none>
-  Groups:					    <none>
+  Users:                        <none>
+  Groups:                       <none>
 Settings:
-  Allow Privileged:		   		false
-  Allow Privilege Escalation:	true
-  Default Add Capabilities:		SYS_TIME,SETGID,SETUID
-  Required Drop Capabilities:	KILL,MKNOD
-  Allowed Capabilities:			<none>
-  Allowed Seccomp Profiles:		<none>
-  Allowed Volume Types:				awsElasticBlockStore,azureDisk,azureFile,cephFS,cinder,configMap,csi,downwardAPI,emptyDir,fc,flexVolume,flocker,gcePersistentDisk,gitRepo,glusterfs,iscsi,nfs,persistentVolumeClaim,photonPersistentDisk,portworxVolume,projected,quobyte,rbd,scaleIO,secret,storageOS,vsphere
-  Allowed Flexvolumes:			<all>
-  Allowed Unsafe Sysctls:		<none>
-  Forbidden Sysctls:			<none>
-  Allow Host Network:			false
-  Allow Host Ports:				false
-  Allow Host PID:				false
-  Allow Host IPC:				false
-  Read Only Root Filesystem:	false
+  Allow Privileged:             false
+  Allow Privilege Escalation:   true
+  Default Add Capabilities:     SYS_TIME,SETGID,SETUID
+  Required Drop Capabilities:   KILL,MKNOD
+  Allowed Capabilities:         <none>
+  Allowed Seccomp Profiles:     <none>
+  Allowed Volume Types:         awsElasticBlockStore,azureDisk,azureFile,cephFS,cinder,configMap,csi,downwardAPI,emptyDir,fc,flexVolume,flocker,gcePersistentDisk,gitRepo,glusterfs,iscsi,nfs,persistentVolumeClaim,photonPersistentDisk,portworxVolume,projected,quobyte,rbd,scaleIO,secret,storageOS,vsphere
+  Allowed Flexvolumes:          <all>
+  Allowed Unsafe Sysctls:       <none>
+  Forbidden Sysctls:            <none>
+  Allow Host Network:           false
+  Allow Host Ports:             false
+  Allow Host PID:               false
+  Allow Host IPC:               false
+  Read Only Root Filesystem:    false
   Run As User Strategy: MustRunAsRange
-    UID:					    <none>
-    UID Range Min:				1000
-    UID Range Max:				2000
+    UID:                        <none>
+    UID Range Min:              1000
+    UID Range Max:              2000
   SELinux Context Strategy: RunAsAny
-    User:					    <none>
-    Role:				    	<none>
-    Type:				    	<none>
-    Level:				    	<none>
+    User:                       <none>
+    Role:                       <none>
+    Type:                       <none>
+    Level:                      <none>
   FSGroup Strategy: MustRunAs
-    Ranges:					    5000-6000
+    Ranges:                     5000-6000
   Supplemental Groups Strategy: MustRunAs
-    Ranges:					    5000-6000
+    Ranges:                     5000-6000
 ```
 
 ## How to associate an SCC with a deployment manifest
@@ -298,13 +298,13 @@ We can see the details of the project using the `describe` command:
 
 ```bash
 $ oc describe project scc-test-project
-Name:			scc-test-project
-Labels:			<none>
-Annotations:	openshift.io/description=
-		    	openshift.io/display-name=
-	    		openshift.io/sa.scc.mcs=s0:c25,c15
-	    		openshift.io/sa.scc.supplemental-groups=1000630000/10000
-	    		openshift.io/sa.scc.uid-range=1000630000/10000
+Name:           scc-test-project
+Labels:         <none>
+Annotations:    openshift.io/description=
+                openshift.io/display-name=
+                openshift.io/sa.scc.mcs=s0:c25,c15
+                openshift.io/sa.scc.supplemental-groups=1000630000/10000
+                openshift.io/sa.scc.uid-range=1000630000/10000
 ...
 ```
 
@@ -318,30 +318,10 @@ On OpenShift, an administrator can create a **Role** with a rule to define which
 
 There are 2 types of RBAC roles, **local** roles are limited to specific projects, while **cluster** roles apply to the entire OpenShift platform and all projects. For our scenario, we will just focus on **local** roles.
 
-One way to create a role is to use a YAML file. For example:
-
-```yaml
-apiVersion: v1
-kind: Role
-metadata:
-  name: my-custom-role
-rules:
-- apiGroups:
-  -  security.openshift.io
-  resourceNames:
-  - my-custom-scc
-  resources:
-  - securitycontextconstraints
-  verbs:
-  - use
-```
-
-> **IMPORTANT**: The **rules** section is how you link the role with a specific SCC - in this case we point to the custom SCC we created in the last section.
-
-use the following command to create the role in the current project by submitting the role definition file using the command:
+To create a local role named `my-custom-role` that points to our custom SCC, use the command:
 
 ```bash
-oc create -f <file-name>.yaml
+oc create role my-custom-role --verb=use --resource=scc --resource-name=my-custom-scc -n scc-test-project
 ```
 
 To view the new role, use the command:
@@ -412,8 +392,22 @@ oc adm policy add-role-to-user my-custom-role -z my-custom-service-account -n sc
 To see the new association, use the command:
 
 ```bash
-oc describe rolebinding.rbac -n scc-test-project
+$ oc describe rolebinding.rbac -n scc-test-project
+...
+Name:         my-custom-role
+Labels:       <none>
+Annotations:  <none>
+Role:
+  Kind:  ClusterRole
+  Name:  my-custom-role
+Subjects:
+  Kind            Name                         Namespace
+  ----            ----                         ---------
+  ServiceAccount  my-custom-service-account    scc-test-project
+...
 ```
+
+Note that our custom service account is now associated with our custom role.
 
 #### Assign service accounts to an SCC
 
@@ -438,6 +432,8 @@ users:
 - my-custom-service-account
 ...
 ```
+
+Note that our custom service account is now associated with our custom SCC.
 
 ## Deployment Manifest details
 
