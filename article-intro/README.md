@@ -25,7 +25,7 @@ If the pod is denied the requested permissions, the **OpenShift Administrator** 
 * Determine if the additional requests made in the manifest are in fact needed.
 * Determine what SCC will allow the requested permissions, or if none exist, create a new one.
 * Assign the SCC to a role for the appropriate users, groups, and/or service accounts, or create such a role if needed.
-* Assign the new role to the **OpenShift Servvice Account**.
+* Assign the new role to the **OpenShift Service Account**.
 
 Here is an overview of how user and service accounts, roles, deployment manifiests, and SCCs are involved in the deployment process:
 
@@ -39,8 +39,6 @@ Here is an overview of how user and service accounts, roles, deployment manifies
 1. OpenShift processes the manifest and attempts to deploy the pod. The deployment process will compare the permissions requested by the deployment manifest against the permissions allowed by the associated SCCs.
 1. If the associated SCC cannot provide all of the permissions the deployment manifest requests, the deployment will fail.
 1. Otherwise, the deployment will create the pod and run the application.
-
-TODO: do we need more detail on the actual deployment? what actually fails - deployment, pod creation, pod starting...
 
 Now that we have a high-level view of how deployment manifests work with SCCs on OpenShift, let's dig into the details.
 
@@ -59,7 +57,7 @@ Up to this point we have used the generic term "permissions" to describe what po
 ### Privileges  
 
 * **allowPrivilegedContainer** - can a pod run privileged containers
-* **allowHostNetwork**
+* **allowHostNetwork** TODO
 * **aloowHostPorts**
 
 ### Access Control
@@ -79,6 +77,7 @@ In the deployment manifest, these values are set at the pod level and pertain to
 * **securityContext.runAsGroup** - request to run under a specific group ID.
 * **securityContext.fsGroup** - request to run under a specific group ID for accessing storage volumes.
 * **securityContext.XXXXXX** - request to run using a specific SELinux context.
+TODO
 
 ### Capabilities
 
@@ -128,7 +127,7 @@ Administrators can manage the SCCs on the OpenShift platform via the OpenShift C
 ```bash
 oc get scc
 oc get scc <scc name> -o yaml
-oc describe scc <scc name>
+oc describe scc/<scc name>
 oc edit scc <scc name>
 oc delete scc <scc name>
 ```
@@ -177,7 +176,7 @@ Note how locked down this SCC is - it doesn't allow any special privileges or ca
 
 When determining which SCC to assign, it is important to remember that less is better. If your pod requires permission A, don't select an SCC that provides permissions A, B, and C.
 
-If none of the default SCCs provide exactly what you are looking for, you can create a custom one. One way to create one is by creating a YAML file, such as the following:
+If none of the default SCCs provide exactly what you are looking for, you can create a custom one. One way to do this is by creating a YAML file, such as the following:
 
 ```yaml
 kind: SecurityContextConstraints
@@ -266,21 +265,19 @@ Settings:
     Ranges:                     5000-6000
 ```
 
-## How to associate an SCC with a deployment manifest
+## Important resources in SCC processing
 
-Once we have decided which SCC to use (pre-existing or custom), how do we get our deployment manifest to use it?
+Once we have decided which SCC to use (pre-existing or custom), how do we link to it in our deployment?
 
-There a variety of ways to do this, but before we get into the details, let's make sure we know what objects are involved, and how to create them.
+There a variety of ways to do this, but first we need to cover all of the resources that are involved, this includes:
 
-* Project
-* RBAC Role
-* Service Account
-* SCC
-* Deployment Manifest
+* Projects
+* RBAC Roles
+* Service Accounts
 
 ### Project namespace
 
-The first step is to set the OpenShift project to work in. This will provide the namespace to manage your resources.
+The project provides the OpenShift namespace that will contain and manage all the resources in your deployment.
 
 To create a new project named `scc-test-project` and set it as your default, use the command:
 
@@ -405,15 +402,15 @@ secrets:
 - name: my-custom-service-account-dockercfg-zgzx9
 ```
 
-### Associating service accounts to SCCs
+## How to link service accounts to SCCs
 
-Now that we have all the pieces, let's get into how we can link the SCC to our deployment manifest.
+The service account is the key to linking deployments with SCCs.
 
-There are 2 ways to accomplish this:
+The link can be accomplished by using either of the following methods:
 
-#### Assign SCCs to RBAC roles
+### Assign SCCs to RBAC roles
 
-When we created our RBAC role, we associated it with a specific SCC. We also created a new service account. The final step is to associate the service account with the role.
+When we created our RBAC role, we associated it with a specific SCC. We also created a new service account. The final step is to associate the service account with the role by creating a role binding.
 
 To assign our role to our service account, use the command:
 
@@ -421,7 +418,7 @@ To assign our role to our service account, use the command:
 oc adm policy add-role-to-user my-custom-role -z my-custom-service-account -n scc-test-project
 ```
 
-To see the new association, use the command:
+To see the new role binding, use the command:
 
 ```bash
 $ oc describe rolebinding.rbac -n scc-test-project
@@ -441,7 +438,9 @@ Subjects:
 
 Note that our custom service account is now associated with our custom role.
 
-#### Assign service accounts to an SCC
+![sa-to-role-to-scc](images/sa-to-role-to-scc.png)
+
+### Assign service accounts to an SCC
 
 Another approach is to directly assign a service account to an SCC.
 
@@ -467,30 +466,11 @@ users:
 
 Note that our custom service account is now associated with our custom SCC.
 
-### Deployment manifests
+![sa-to-scc](images/sa-to-scc.png)
 
-The final piece in the puzzle is the deployment manifest, which points to the service account. As shown above, we can then link to the SCC using one of 2 methods:
+## Deployment manifests
 
-#### Deployment manifest linked to SCC using service account
-
-![flow-with-service-account](images/flow-with-service-account.png)
-
-1. The **Deployment Manifest** is linked ...
-1. to a **Service Account**, which is associated ...
-1. with an **SCC**.
-
-#### Deployment manifest linked to SCC using RBAC roles
-
-![flow-with-role-binding](images/flow-with-role-binding.png)
-
-1. The **Deployment Manifest** is linked ...
-1. to a **Service Account**, which is associated  ...
-1. with a **Role Binding**, with the **Role** assigned ...
-1. to an **SCC**.
-
-## Deployment Manifest details
-
-Now that we covered all of the objects that are needed to supports SCCs, let's dive into some of the details of the deployment manifest.
+The final piece in the puzzle is the deployment manifest, which points to the service account, which links to the SCC.
 
 A deployment manifest is used to create and build a deployment, which can be then used to deploy a pod.
 
@@ -545,21 +525,6 @@ The second set of `securityContext` values are associated with specific containe
 
 * **capabilities - add** - requests that the `web-app-containter` container be allowed the `NET_ADMIN` and `SYS_TIME` capabilities .
 
-## SCC Admission Process
-
-As described earlier, OpenShift compares the permissions requested by the pod against what the associated SCC allows.
-
-But what happens when multiple SCCs are available? In this case, OpenShift will prioritize them.
-
-SCCs have a priority field that affects the ordering when a pod request is validated. A higher priority SCC is moved to the front of the set when sorting. When the complete set of available SCCs are determined they are ordered by:
-
-* Highest priority first, nil is considered a 0 priority
-* If priorities are equal, the SCCs will be sorted from most restrictive to least restrictive
-* If both priorities and restrictions are equal the SCCs will be sorted by name
-
-TODO: show deployment yaml after deployment to see which SCC was used
-TODO: add more detail. Are the SCCs merged? What if one SCC allows, but is lower priority of another SCC that fails?
-
 ## Putting it all together
 
 Using the examples from above, let's walk through the OpenShift SCC admission process to determine if our pod gets deployed or not.
@@ -596,9 +561,20 @@ Now let's try it against our **custom** SCC.
 
 ![pod-vs-custom-text](images/pod-vs-custom-text.png)
 
-## How deployments can fail
+## SCC Admission Process
 
-TODO
+As described earlier, OpenShift compares the permissions requested by the pod against what the associated SCC allows.
+
+But what happens when multiple SCCs are available? In this case, OpenShift will prioritize them.
+
+SCCs have a priority field that affects the ordering when a pod request is validated. A higher priority SCC is moved to the front of the set when sorting. When the complete set of available SCCs is determined, they are ordered by:
+
+* Highest priority first, nil is considered a 0 priority
+* If priorities are equal, the SCCs will be sorted from most restrictive to least restrictive
+* If both priorities and restrictions are equal the SCCs will be sorted by name
+
+TODO: show deployment yaml after deployment to see which SCC was used
+TODO: add more detail. Are the SCCs merged? What if one SCC allows, but is lower priority of another SCC that fails?
 
 ## Summary
 
