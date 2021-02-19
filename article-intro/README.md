@@ -337,6 +337,38 @@ PolicyRule:
   securitycontextconstraints.security.openshift.io  []                 [my-custom-scc]  [use]
 ```
 
+Alternatively, you can view the contents of the role YAML file with the command:
+
+```bash
+$ oc get role/my-custom-role -o yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  creationTimestamp: "2021-02-18T04:51:44Z"
+  managedFields:
+  - apiVersion: rbac.authorization.k8s.io/v1
+    fieldsType: FieldsV1
+    fieldsV1:
+      f:rules: {}
+    manager: Mozilla
+    operation: Update
+    time: "2021-02-18T05:13:24Z"
+  name: my-custom-role
+  namespace: scc-test-project
+  resourceVersion: "9364438"
+  selfLink: /apis/rbac.authorization.k8s.io/v1/namespaces/scc-test-2/roles/my-custom-role-5
+  uid: 5bc25cac-5672-456f-b4ba-6413a6f55c49
+rules:
+- apiGroups:
+  - security.openshift.io
+  resourceNames:
+  - my-custom-scc
+  resources:
+  - securitycontextconstraints
+  verbs:
+  - use
+```
+
 ### Service accounts
 
 Service accounts are basically user accounts, but are more flexible in that you don't have to share a regular user's credentials.
@@ -373,7 +405,7 @@ secrets:
 - name: my-custom-service-account-dockercfg-zgzx9
 ```
 
-### Tie them all together
+### Associating service accounts to SCCs
 
 Now that we have all the pieces, let's get into how we can link the SCC to our deployment manifest.
 
@@ -386,7 +418,7 @@ When we created our RBAC role, we associated it with a specific SCC. We also cre
 To assign our role to our service account, use the command:
 
 ```bash
-oc adm policy add-role-to-user my-custom-role -z my-custom-service-account -n scc-test-poject
+oc adm policy add-role-to-user my-custom-role -z my-custom-service-account -n scc-test-project
 ```
 
 To see the new association, use the command:
@@ -435,7 +467,30 @@ users:
 
 Note that our custom service account is now associated with our custom SCC.
 
+### Deployment manifests
+
+The final piece in the puzzle is the deployment manifest, which points to the service account. As shown above, we can then link to the SCC using one of 2 methods:
+
+#### Deployment manifest linked to SCC using service account
+
+![flow-with-service-account](images/flow-with-service-account.png)
+
+1. The **Deployment Manifest** is linked ...
+1. to a **Service Account**, which is associated ...
+1. with an **SCC**.
+
+#### Deployment manifest linked to SCC using RBAC roles
+
+![flow-with-role-binding](images/flow-with-role-binding.png)
+
+1. The **Deployment Manifest** is linked ...
+1. to a **Service Account**, which is associated  ...
+1. with a **Role Binding**, with the **Role** assigned ...
+1. to an **SCC**.
+
 ## Deployment Manifest details
+
+Now that we covered all of the objects that are needed to supports SCCs, let's dive into some of the details of the deployment manifest.
 
 A deployment manifest is used to create and build a deployment, which can be then used to deploy a pod.
 
@@ -473,6 +528,8 @@ spec:
         - containerPort: 80
 ...
 ```
+
+On behalf of the running containers of the pod, the deployment manifest is responsible for requesting the permissions for the container applications to run.
 
 The `serviceAccountName` object defines the service account to use during deployment. As shown earlier, it can be tied to an SCC either directly or via its associated role.
 
@@ -538,6 +595,10 @@ Now let's try it against our **custom** SCC.
 ![pod-vs-custom](images/pod-vs-custom.png)
 
 ![pod-vs-custom-text](images/pod-vs-custom-text.png)
+
+## How deployments can fail
+
+TODO
 
 ## Summary
 
