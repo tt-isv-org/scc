@@ -1,6 +1,36 @@
 # Red Hat OpenShift security practices using security context contraints
 
-To better understand how Security Context Contraints (**SCC**) are used to control access on a Red Hat OpenShift Container Platform, let's walk-through a common deployment scenario.
+**SCC** stands for Security Content Contraints, and it is the tool provided by OpenShift to control what privileges can be granted to a pod when deployed on a Red Hat OpenShift Container Platform.
+
+## What are SCCs and why do you need them?
+
+Administrators use SCCs to limit what actions a pod is permitted to perform.
+
+A secure OpenShift container platform should not, by default, allow a pod to perform any "privileged" actions, such as:
+
+* access storage
+* modify network settings
+* run using a specific user or group ID
+
+But what if your pod needs to perform one of these actions? For example, you have developed an application that needs to read and write data to a storage volume that has an group ID of "1234". In order to access the volume, the pod containing the application needs to run using this same group ID.
+
+How do we solve this problem? This is where SCCs come in.
+
+SCCs define what actions the pod is allowed to perform. In the same way that it can prevent a pod from performing any "privileged" actions, it can also agree to allow the pod certain privileges so that it can run successfully.
+
+## How a pod requests special privileges
+
+In order to peform privileged actions, a pod must request "permission" via the deployment manifest. This manifest is associated with an SCC, which then decides if the requested permissions can be granted.
+
+As a best-practice, SCCs should be developed to be as limiting as possible. Instead of simply (and unsafely) allowing the pod to run as a "privileged" user (e.g. run as "root"), it should only allow the specific actions that are being requested.
+
+Another way to envision this relationship is to think of the SCC as a lock protecting system resources, and the manifest being the key. The deployment is only successful if the key fits.
+
+![capabilities](images/capabilities.png)
+
+## The big picture
+
+To better understand how SCCs are used to control access on a Red Hat OpenShift Container Platform, let's walk-through a common deployment scenario.
 
 First, let's identify the personas that are typically involved in the process of developing an application, configuring a pod to contain the application, and then deploying that application on OpenShift.
 
@@ -10,13 +40,13 @@ First, let's identify the personas that are typically involved in the process of
 * **OpenShift Service Account** - a special type of user account that can be created to be associated with one or more SCCs.
 * **OpenShift Administrator** - ensures the security of the OpenShift platform by granting access to protected resources only as needed.
 
-Administrators use Role-Based Access Control (**RBAC**) resources to control user access. In our scenario, the administrator will create an **OpenShift User** account that has the permission to deploy pods. The **Deployer** can then use that account to create and deploy the pod on OpenShift. The **Deployer** performs this task by creating a **deployment manifest**, which links to the application and provides instructions on how the application should be deployed and ran.
+Administrators use RBAC (role-based access control) resources to control user access. In our scenario, the administrator will create an **OpenShift User** account that has the permission to deploy pods. The **Deployer** can then use that account to create and deploy the pod on OpenShift. The **Deployer** performs this task by creating a **deployment manifest**, which links to the application and provides instructions on how the application should be deployed and ran.
 
 If the application is a typical stateless workload (i.e. requiring no special permissions), the **Deployer** will generate a basic deployment manifest, and the pod will be deployed without any issues.
 
-But what if the application requires access to protected resources such as local storage, networking services, or needs to run under specific user or group identities? In this case the **Deployer** will need to enhance the deployment manifest to request the additional permissions. And who gets to decide if the requests should be allowed or not? This is where SCCs and RBAC come into play.
+When more than that is required, the **Deployer** will need to enhance the deployment manifest to request the additional permissions. The associated SCC is then used to determine if the request should be granted.
 
-SCCs are the tool provided by OpenShift to control what permissions can be granted to a pod - specifically what privileges are allowed, what user and group IDs can be assigned, and what additional capabilities can be granted. SCCs are associated with users, groups, and/or service accounts - typically via RBAC roles. Therefore, when the  **Deployer** attempts to deploy the pod, the deployment manifest will specify what **OpenShift Service Account** to use, which in turn is associated with a role and an SCC.
+SCCs are associated with users, groups, and/or service accounts - typically via RBAC roles. Therefore, when the  **Deployer** attempts to deploy the pod, the deployment manifest will specify what **OpenShift Service Account** to use, which in turn is associated with a role and an SCC.
 
 If the SCC allows all of the requested permissions made by the deployment manifest, the deployment is created and the pod/application is run.
 
@@ -41,14 +71,6 @@ Here is an overview of how user and service accounts, roles, deployment manifies
 1. Otherwise, the deployment will create the pod and run the application.
 
 Now that we have a high-level view of how deployment manifests work with SCCs on OpenShift, let's dig into the details.
-
-## Permissions requested vs. permissions allowed
-
-In the flow diagram above, you see that the pod will only be deployed if the requested permissions defined in the deployment manifest match the allowed permissions defined by the SCC.
-
-Another way to envision this relationship is to think of the SCC as a lock protecting system resources, and the manifest being the key. The app only gets access to the resources if the key fits.
-
-![capabilities](images/capabilities.png)
 
 ## Types of permissions that can be requested
 
