@@ -98,8 +98,6 @@ In this scenario, you will:
     Use the pod name to access the logs and check the status.
 
     ```bash
-    $ oc create -f ubi-pod.yaml
-    pod/ubi-pod created
     $ oc logs pod/ubi-pod
     Hello universe!
     $ oc get pod/ubi-pod
@@ -185,6 +183,8 @@ exit
 * Using the `anyuid` SCC, a pod can run as root with minimal constraints.
 * A root user can write to a file and change the ownership of files.
 
+> TODO: This example needs to explain the use of out-of-the-box CSSs and the selection process.
+
 ### What is wrong with this?
 
 Before going further, we should note that this was an example of **what not to do!**  This tutorial is about security and this example shows a lack of security. If your results were different, that's good! Perhaps your cluster, project, and user are more secure than the example as shown.
@@ -193,7 +193,7 @@ Before going further, we should note that this was an example of **what not to d
 
 The rest of this tutorial is about security context **constraints** (SCCs). SCCs are intended to limit your permissions to create a more secure cluster. We'll show you some wide-open security (bad) practices, but the intent is always to help you learn what to look for and how to use constraints to make your cluster more secure.
 
-It is also notable that creating a pod as a user is not a typical workload. Starting in the next example we'll use deployments and service accounts. The pod/user example is a handy way to try things out, but please continue on to see how deployments and service accounts are used.
+It is also worth noting that creating a pod as a user is not a typical workload. Starting in the next example we'll use deployments and service accounts. The pod/user example is a handy way to try things out, but please continue on to see how deployments and service accounts are used.
 
 ## Scenario 2: A deployment with SCCs
 
@@ -291,6 +291,8 @@ We did not add a volume or any special privileges. So expect to see red errors o
 If you view the pod log, you'll see that the *ERROR* and *INFO* messages are written to the log every time you hit the web page.
 
 ![new_app_log.png](images/new_app_log.png)
+
+## Scenario 3: User and group access controls with volumes
 
 ### Step 2. Attempt to redeploy the application with a security context
 
@@ -529,13 +531,13 @@ This YAML will deploy the same application, but this time we are requesting some
 
 In this scenario, we'll learn how to run a container as root, as a privileged non-root user, and as regular user.
 
-We'll be creating a *Deployment* which has template describing the desired pod/container specs. With a *Deployment* a *Replica Set* is created to validate the security contexts, start the pod(s) using a service account, and keep the desired number of pod instances running.
+We'll be creating a *Deployment* which uses a template describing the desired pod/container specs. With a *Deployment* a *Replica Set* is created to validate the security contexts, start the pod(s) using a service account, and keep the desired number of pod instances running.
 
 ### Step 1. Non-privileged user
 
 Since the application is intended to run with a specific user ID and other restricted capabilities, we really should use a `securityContext` to request those capabilities.
 
-This YAML will deploy the same application, but this time we are requesting some specific security constraint requirements including:
+This YAML will deploy the same application, but this time we are requesting some specific security constraint requirements, including:
 
 * Run as user 1234
 * Create a file system group ID of 5678
@@ -586,10 +588,9 @@ In this scenario, you will:
 1. Create a user and SCC that only allows specific Linux capabilities
 1. Create 2 pods with fine-grained capability constraints
     * One can change file ownership
-    * One that **cannot** change file ownership
+    * One **cannot** change file ownership
 1. Examine their security settings
 1. Demonstrate allowed and limited capabilities
-
 
 ### Step 1: Create a root pod that cannot chown
 
@@ -651,7 +652,7 @@ The rest of this tutorial is about security context **constraints** (SCCs). SCCs
 
 In many cases, containers that require network access (beyond the typical cloud native web app ingress/egress) will likely expect to run as root or privileged. In this use case, we'll demonstrate how to follow the principle of least privilege and use an SCC to provide a minimal Linux capability while denying root or a fully privileged container.
 
-A common example is the ability to use `ping`. While it might seem like a very harmless capability, the use of ping includes the capability to craft raw packets and this is considered a security risk. This capability is **NET_RAW** in our security context. One example of an application that would merit allowing this capability is a system monitoring application. If your enterprise relies on an application which uses ping to track system availability, then you need to provide this capability to the mission-critical trusted application. With the following steps, you will demonstrate how to privide the ability to use ping without using root or a privileged container (only NET_RAW).
+A common example is the ability to use `ping`. While it might seem like a very harmless capability, the use of ping includes the capability to craft raw packets and this is considered a security risk. This capability is **NET_RAW** in our security context. One example of an application that would merit allowing this capability is a system monitoring application. If your enterprise relies on an application which uses ping to track system availability, then you need to provide this capability to the mission-critical trusted application. With the following steps, you will demonstrate how to provide the ability to use ping without using root or a privileged container (only NET_RAW).
 
 Another common example, is the ability to listen to privileged ports. A web server typically listens to port 80 and 443 which are privileged. Ideally you would configure your web server to work better with the usual assigned ports, but in case your organization requires the use of privilged ports, you would want to provide this capability with **NET_BIND** while not allowing root or a fully privileged container. Again, always follow the principle of least privilege to minimize your security risk.
 
@@ -659,7 +660,7 @@ Another common example, is the ability to listen to privileged ports. A web serv
 
 1. Copy this YAML and save it to a file named alpine_pod.yaml (or download it from [here](todo)).
 
-    Our basic pod will use an Alpine Linux container from Docker Hub. Alpine Linux is a tiny, minimal Linux distribution. So it is a great way to get started. You can try substituting your favorite Linux image. We're just creating a pod and using a `sleep` command to keep it running.
+    Our basic pod will use an Alpine Linux container from Docker Hub. Alpine Linux is a tiny, minimal Linux distribution, so it is a great way to get started. You can try substituting your favorite Linux image. We're just creating a pod and using a `sleep` command to keep it running.
 
     ```yaml
     apiVersion: v1
@@ -797,6 +798,6 @@ round-trip min/avg/max = 0.085/0.110/0.126 ms
 ### What did we learn?
 
 * If allowed, many images will default to run as root.
-* We can check the pod YAML, to see what SCC was used.
+* We can check the pod YAML to see what SCC was used.
 * Using the `anyuid` SCC, a pod can run as root with minimal constraints.
 * A root user can write to a file, change the ownership of the file, ping inside the pod, and ping outside the pod.
