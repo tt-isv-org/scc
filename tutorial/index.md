@@ -1,17 +1,22 @@
 # SCC tutorial (work-in-progress)
 
-> TODO: The official tutorial title is TBD
+> TODO: The official "SCC tutorial" title is TBD
 
 This tutorial will give you hands-on experience using security context controls (SCCs) with OpenShift. A variety of scenarios are used to demonstrate several of the many possibilities. Each scenario is intended to work independently of the others. We recommend trying them (or at least reading them) in order, but you can skip ahead and try the scenario that is most applicable to your use case. After you follow our script, going off-script to experiment and learn on your own is highly encouraged.
 
 ## Scenarios
 
-1. [A simple default deployment (restricted)](#-Scenario-1:-A-simple-default-deployment-(restricted))
-1. Running as root vs privileged vs non-privileged
-1. User and group access controls with volumes
-1. Add/drop Linux capabilities for finer control
-1. SELinux
-1. AppArmor
+1. [Your first test pod with SCCs](#-Scenario-1:-Your-first-test-pod-with-SCCs)
+1. [A deployment with SCCs](#-Scenario-2:-A-deployment-with-SCCs)
+1. [User and group access controls with volumes](#-Scenario-3:-User-and-group-access-controls-with-volumes)
+1. [Root and/or privileged container mitigation](#-Scenario-4:-Root-and/or-privileged-container-mitigation)
+1. [Add/drop Linux capabilities for finer control](#-Scenario-5:-Add/drop-Linux-capabilities-for-finer-control)
+1. TODO: SELinux
+1. TODO: AppArmor
+1. TODO: Seccomp profiles
+1. [Shared storage use cases](#-Scenario-6:-Shared-storage-use-cases)
+1. [Network access use cases](#-Scenario-7:-Network-access-use-cases)
+1. TODO: More...?
 
 ## Concepts
 
@@ -49,11 +54,148 @@ export PROJECT=your-project-name
 oc project $PROJECT
 ```
 
-## Scenario 1: A simple default deployment (restricted)
+### Import the Universal Base Image
 
-## Scenario 2: Running as root vs privileged vs non-privileged
+> TBD: Should we import the image or does this just work if you jump right into the examples?
 
-## Scenario 3: User and group access controls with volumes
+```bash
+oc import-image ubi8/ubi --from=registry.access.redhat.com/ubi8/ubi --confirm
+```
+
+## Scenario 1: Your first test pod with SCCs
+
+In this scenario, you will:
+
+1. Create a very, very basic pod
+1. Examine its security settings
+
+### Step 1. Create a very, very basic pod
+
+1. Copy this YAML and save it to a file named ubi-pod.yaml (or download it from [here](static/ubi-pod.yaml)).
+
+    Our basic pod will use a Universal Base Image (UBI) from Red Hat. UBI gives us a lightweight Linux container. We're just creating a pod and using a `sleep` command to keep it running.
+
+    ```yaml
+    apiVersion: v1
+    kind: Pod
+    metadata:
+      name: ubi-pod
+    spec:
+      containers:
+      - image: ubi8/ubi
+        name: container-name
+        command: ['sh', '-c', 'echo "Hello universe!" && sleep infinity']
+    ```
+
+1. Create the pod by running the following command.
+
+    ```bash
+    oc create -f ubi-pod.yaml
+    ```
+
+1. Check the status and logs.
+
+    Use the pod name to access the logs and check the status.
+
+    ```bash
+    $ oc logs pod/ubi-pod
+    Hello universe!
+    $ oc get pod/ubi-pod
+    NAME      READY     STATUS    RESTARTS   AGE
+    ubi-pod   1/1       Running   0          26s
+    $ oc status
+    In project your-project on server https://your-url.containers.cloud.ibm.com:31381
+
+    pod/ubi-pod runs ubi8/ubi
+    ```
+### Step 2. Examine its security settings
+
+You can get the full YAML description of the pod to see details. For this tutorial, the interesting part is the annotation that shows what SCC was used, the container securityContext, and the pod securityContext.
+
+```bash
+$ oc get pod/ubi-pod -o yaml
+[ ... ]
+    openshift.io/scc: anyuid
+[ ... ]
+    securityContext:
+      capabilities:
+        drop:
+        - MKNOD
+[ ... ]
+  securityContext:
+    seLinuxOptions:
+      level: s0:c26,c15
+[ ... ]
+```
+
+> NOTE: Depending on your cluster privileges, your results might be different. What we are showing here is what you get with a user that is a cluster admin and is allowed to use the `anyuid` SCC.
+
+You can start a remote shell session to see how things look inside the pod.
+
+```bash
+oc rsh ubi-pod
+```
+
+This puts you in the first container in the pod. In this case, we only had one container.
+
+In your remote shell, try the following commands to see an example of the security you get with typical container.
+
+```bash
+whoami
+id
+echo hello > hellofile
+ls -l hellofile
+chown 1:1 hellofile
+ls -l hellofile
+cat hellofile
+chown 0:0 hellofile
+ls -l hellofile
+exit
+```
+
+Let's examine the results with our UBI `anyuid` container.
+
+```bash
+$ oc rsh ubi-pod
+sh-4.4# whoami
+root
+sh-4.4# id
+uid=0(root) gid=0(root) groups=0(root)
+sh-4.4# echo hello > hellofile
+sh-4.4# ls -l hellofile
+-rw-rw-rw-. 1 root root 6 Feb 19 21:21 hellofile
+sh-4.4# chown 1:1 hellofile
+sh-4.4# ls -l hellofile
+-rw-rw-rw-. 1 bin bin 6 Feb 19 21:21 hellofile
+sh-4.4# cat hellofile
+hello
+sh-4.4# chown 0:0 hellofile
+sh-4.4# ls -l hellofile
+-rw-rw-rw-. 1 root root 6 Feb 19 21:21 hellofile
+sh-4.4# exit
+exit
+```
+
+### What did we learn?
+
+* If allowed, many images will default to run as root.
+* We can check the pod YAML, to see what SCC was used.
+* Using the `anyuid` SCC, a pod can run as root with minimal constraints.
+* A root user can write to a file and change the ownership of files.
+
+> TODO: This example needs to explain the use of out-of-the-box CSSs and the selection process.
+
+### What is wrong with this?
+
+Before going further, we should note that this was an example of **what not to do!**  This tutorial is about security and this example shows a lack of security. If your results were different, that's good! Perhaps your cluster, project, and user are more secure than the example as shown.
+
+### What's next?
+
+The rest of this tutorial is about security context **constraints** (SCCs). SCCs are intended to limit your permissions to create a more secure cluster. We'll show you some wide-open security (bad) practices, but the intent is always to help you learn what to look for and how to use constraints to make your cluster more secure.
+
+It is also worth noting that creating a pod as a user is not a typical workload. Starting in the next example we'll use deployments and service accounts. The pod/user example is a handy way to try things out, but please continue on to see how deployments and service accounts are used.
+
+## Scenario 2: A deployment with SCCs
 
 In this scenario, you will:
 
@@ -149,6 +291,8 @@ We did not add a volume or any special privileges. So expect to see red errors o
 If you view the pod log, you'll see that the *ERROR* and *INFO* messages are written to the log every time you hit the web page.
 
 ![new_app_log.png](images/new_app_log.png)
+
+## Scenario 3: User and group access controls with volumes
 
 ### Step 2. Attempt to redeploy the application with a security context
 
@@ -382,3 +526,278 @@ This YAML will deploy the same application, but this time we are requesting some
 ## Deleting resources
 
 > TODO: help clean up
+
+## Scenario 4: Root and/or privileged container mitigation
+
+In this scenario, we'll learn how to run a container as root, as a privileged non-root user, and as regular user.
+
+We'll be creating a *Deployment* which uses a template describing the desired pod/container specs. With a *Deployment* a *Replica Set* is created to validate the security contexts, start the pod(s) using a service account, and keep the desired number of pod instances running.
+
+### Step 1. Non-privileged user
+
+Since the application is intended to run with a specific user ID and other restricted capabilities, we really should use a `securityContext` to request those capabilities.
+
+This YAML will deploy the same application, but this time we are requesting some specific security constraint requirements, including:
+
+* Run as user 1234
+* Create a file system group ID of 5678
+* Add capabilities: CHOWN and SETGID
+* Drop capabilities: SETUID, KILL, MKNOD
+
+#### Deploying the application with security context settings
+
+1. Copy (or download) this scc-template.yaml file.
+
+```yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: ubi-privs
+spec:
+  containers:
+  - image: ubi8/ubi
+    name: priv-0
+    command: ['sh', '-c', 'echo "Hello from user $(user -u) privileged!!" && sleep infinity']
+    securityContext:
+      runAsUser: 0
+      privileged: true
+  - image: ubi8/ubi
+    name: priv-1234
+    command: ['sh', '-c', 'echo "Hello from user $(user -u) privileged!!" && sleep infinity']
+    securityContext:
+      runAsUser: 1234
+      privileged: true
+  - image: ubi8/ubi
+    name: non-priv-0
+    command: ['sh', '-c', 'echo "Hello from user $(user -u) non-privileged!!" && sleep infinity']
+    securityContext:
+      runAsUser: 0
+      privileged: false
+  - image: ubi8/ubi
+    name: non-priv-1234
+    command: ['sh', '-c', 'echo "Hello from user $(user -u) non-privileged!!" && sleep infinity']
+    securityContext:
+      runAsUser: 1234
+      privileged: false
+```
+
+## Scenario 5: Add/drop Linux capabilities for finer control
+
+In this scenario, you will:
+
+1. Create a user and SCC that only allows specific Linux capabilities
+1. Create 2 pods with fine-grained capability constraints
+    * One can change file ownership
+    * One **cannot** change file ownership
+1. Examine their security settings
+1. Demonstrate allowed and limited capabilities
+
+### Step 1: Create a root pod that cannot chown
+
+Copy this YAML and save it to a file named ubi-cap.yaml (or download it from [here](static/ubi-pod.yaml)).
+
+```yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: ubi-cap
+  namespace: your-project
+spec:
+  containers:
+  - image: ubi8/ubi
+    name: flask-cap
+    command: ['sh', '-c', 'echo "Hello from user $(id -u) privileged" && sleep infinity']
+    securityContext:
+      capabilities:
+        drop:
+          - NET_RAW
+          - CHOWN
+```
+
+```yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: ubi-cap2
+  namespace: your-project
+spec:
+  containers:
+  - image: ubi8/ubi
+    name: flask-cap
+    command: ['sh', '-c', 'echo "Hello from user $(id -u) privileged" && sleep infinity']
+    securityContext:
+      capabilities:
+        drop:
+          - NET_RAW
+```
+
+Before going further, we should note that this was an example of **what not to do!**  This tutorial is about security and this example shows a lack of security. If your results were different, that's good. Perhaps your cluster and user are more locked-down.
+
+The rest of this tutorial is about security context **constraints** (SCCs). SCCs are meant to limit your permissions to create a more secure cluster.
+
+## Scenario 6: Shared storage use cases
+
+* NFS example
+    * Shared storage
+    * volumeMode: Filesystem
+    * 2 pods RWX (same project/namespace)
+    * Each pod can write to and read from the other pod via the file system
+
+* Block storage example
+    * 1 pod RWO
+    * Retain
+    * Write to storage, kill pod, a new pod mounts and reads/writes to the same volume without data loss.
+
+## Scenario 7: Network access use cases
+
+In many cases, containers that require network access (beyond the typical cloud native web app ingress/egress) will likely expect to run as root or privileged. In this use case, we'll demonstrate how to follow the principle of least privilege and use an SCC to provide a minimal Linux capability while denying root or a fully privileged container.
+
+A common example is the ability to use `ping`. While it might seem like a very harmless capability, the use of ping includes the capability to craft raw packets and this is considered a security risk. This capability is **NET_RAW** in our security context. One example of an application that would merit allowing this capability is a system monitoring application. If your enterprise relies on an application which uses ping to track system availability, then you need to provide this capability to the mission-critical trusted application. With the following steps, you will demonstrate how to provide the ability to use ping without using root or a privileged container (only NET_RAW).
+
+Another common example, is the ability to listen to privileged ports. A web server typically listens to port 80 and 443 which are privileged. Ideally you would configure your web server to work better with the usual assigned ports, but in case your organization requires the use of privilged ports, you would want to provide this capability with **NET_BIND** while not allowing root or a fully privileged container. Again, always follow the principle of least privilege to minimize your security risk.
+
+### Step 1. Create the pods
+
+1. Copy this YAML and save it to a file named alpine_pod.yaml (or download it from [here](todo)).
+
+    Our basic pod will use an Alpine Linux container from Docker Hub. Alpine Linux is a tiny, minimal Linux distribution, so it is a great way to get started. You can try substituting your favorite Linux image. We're just creating a pod and using a `sleep` command to keep it running.
+
+    ```yaml
+    apiVersion: v1
+    kind: Pod
+    metadata:
+      name: alpine-pod-drops
+    spec:
+      containers:
+      - image: alpine:3.13
+        name: drops
+        command: ['sh', '-c', 'echo "Hello CAP DROPS!" && sleep infinity']
+        securityContext:
+          capabilities:
+            drop:
+              - NET_RAW
+              - CHOWN
+      - image: alpine:3.13
+        name: adds
+        command: ['sh', '-c', 'echo "Hello CAP ADDS!" && sleep infinity']
+        securityContext:
+          capabilities:
+            add:
+              - NET_RAW
+              - CHOWN
+    ```
+
+1. Create the pod by running the following command.
+
+    ```bash
+    oc create -f alpine_pod.yaml
+    ```
+
+1. Check the status and logs.
+
+    Use the pod name to access the logs and check the status.
+
+    ```bash
+    $ oc logs pod/alpine-pod
+    Hello world!
+    $ oc get pod/alpine-pod
+    NAME         READY     STATUS    RESTARTS   AGE
+    alpine-pod   1/1       Running   0          5m
+    $ oc status
+    In project your-project on server https://your-url.us-south.containers.cloud.ibm.com:31381
+
+    pod/alpine-pod runs alpine:3.13
+
+    1 info identified, use 'oc status --suggest' to see details.
+    ```
+
+### Step 2. Examine its security settings
+
+You can get the full YAML description of the pod to see details. For this tutorial, the interesting part is the annotation that shows what SCC was used, the container securityContext, and the pod securityContext.
+
+```bash
+$ oc get pod/alpine-pod -o yaml
+[ ... ]
+    openshift.io/scc: anyuid
+[ ... ]
+    securityContext:
+      capabilities:
+        drop:
+        - MKNOD
+[ ... ]
+  securityContext:
+    seLinuxOptions:
+      level: s0:c26,c15
+[ ... ]
+```
+
+> NOTE: Depending on your cluster privileges, your results might be different. What we are showing here is what you get with a user that is a project admin and is allowed to use the `anyuid` SCC.
+
+You can start a remote shell session to see how things look inside the pod.
+
+```bash
+oc rsh alpine-pod
+```
+
+This puts you in the first container in the pod. In this case, we only had one container.
+
+In your remote shell, try the following commands to see an example of the security you get with typical container.
+
+```bash
+whoami
+id
+touch testfile
+ls -l testfile
+chown 1:1 testfile
+ls -l testfile
+echo $(hostname)
+ping -c3 $(hostname)
+ping -c3 example.com
+exit
+```
+
+Let's examine the results with our basic Alpine `anyuid` container.
+
+> TODO: thinking this could be an annotated screenshot from console
+
+```bash
+$ oc rsh alpine-pod
+/ # whoami
+root
+/ # id
+uid=0(root) gid=0(root) groups=0(root),1(bin),2(daemon),3(sys),4(adm),6(disk),10(wheel),11(floppy),20(dialout),26(tape),27(video)
+/ # touch testfile
+/ # ls -l testfile
+-rw-rw-rw-    1 root     root             0 Feb 18 01:55 testfile
+/ # chown 1:1 testfile
+/ # ls -l testfile
+-rw-rw-rw-    1 bin      bin              0 Feb 18 01:55 testfile
+/ # echo $(hostname)
+alpine-pod
+/ # ping -c 3 example.com
+PING example.com (93.184.216.34): 56 data bytes
+64 bytes from 93.184.216.34: seq=0 ttl=56 time=7.620 ms
+64 bytes from 93.184.216.34: seq=1 ttl=56 time=1.026 ms
+64 bytes from 93.184.216.34: seq=2 ttl=56 time=1.743 ms
+
+--- example.com ping statistics ---
+3 packets transmitted, 3 packets received, 0% packet loss
+round-trip min/avg/max = 1.026/3.463/7.620 ms
+/ # ping -c3 $(hostname)
+PING alpine-pod (172.30.140.50): 56 data bytes
+64 bytes from 172.30.140.50: seq=0 ttl=64 time=0.120 ms
+64 bytes from 172.30.140.50: seq=1 ttl=64 time=0.085 ms
+64 bytes from 172.30.140.50: seq=2 ttl=64 time=0.126 ms
+
+--- alpine-pod ping statistics ---
+3 packets transmitted, 3 packets received, 0% packet loss
+round-trip min/avg/max = 0.085/0.110/0.126 ms
+/ # exit
+```
+
+### What did we learn?
+
+* If allowed, many images will default to run as root.
+* We can check the pod YAML to see what SCC was used.
+* Using the `anyuid` SCC, a pod can run as root with minimal constraints.
+* A root user can write to a file, change the ownership of the file, ping inside the pod, and ping outside the pod.
