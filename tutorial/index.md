@@ -6,16 +6,16 @@ This tutorial will give you hands-on experience using security context controls 
 
 ## Scenarios
 
-1. [Your first test pod with SCCs](#-Scenario-1:-Your-first-test-pod-with-SCCs)
-1. [A deployment with SCCs](#-Scenario-2:-A-deployment-with-SCCs)
-1. [User and group access controls with volumes](#-Scenario-3:-User-and-group-access-controls-with-volumes)
-1. [Root and/or privileged container mitigation](#-Scenario-4:-Root-and/or-privileged-container-mitigation)
-1. [Add/drop Linux capabilities for finer control](#-Scenario-5:-Add/drop-Linux-capabilities-for-finer-control)
+1. [Your first test pod with SCCs](#scenario-1-your-first-test-pod-with-sccs)
+1. [A deployment with SCCs](#scenario-2-a-deployment-with-sccs)
+1. [User and group access controls with volumes](#scenario-3-user-and-group-access-controls-with-volumes)
+1. [Root and/or privileged container mitigation](#scenario-4-root-and/or-privileged-container-mitigation)
+1. [Add/drop Linux capabilities for finer control](#scenario-5-add/drop-linux-capabilities-for-finer-control)
 1. TODO: SELinux
 1. TODO: AppArmor
 1. TODO: Seccomp profiles
-1. [Shared storage use cases](#-Scenario-6:-Shared-storage-use-cases)
-1. [Network access use cases](#-Scenario-7:-Network-access-use-cases)
+1. [Shared storage use cases](#scenario-6-shared-storage-use-cases)
+1. [Network access use cases](#scenario-7-network-access-use-cases)
 1. TODO: More...?
 
 ## Concepts
@@ -587,53 +587,247 @@ In this scenario, you will:
 
 1. Create a user and SCC that only allows specific Linux capabilities
 1. Create 2 pods with fine-grained capability constraints
-    * One can change file ownership
-    * One **cannot** change file ownership
+    * One **can** change file ownership
+    * The other **cannot** change file ownership
+    * One specifically drops the ability to set the time
+    * The other gets the ability to set the time from the SCC defaults
 1. Examine their security settings
 1. Demonstrate allowed and limited capabilities
 
-### Step 1: Create a root pod that cannot chown
+### Step 1: Create a service account and SCC with specific capabilities
 
-Copy this YAML and save it to a file named ubi-cap.yaml (or download it from [here](static/ubi-pod.yaml)).
+1. Copy this YAML and save it to a file named caps.yaml (or download it from [here](static/caps.yaml)).
+
+    ```yaml
+    kind: SecurityContextConstraints
+    apiVersion: security.openshift.io/v1
+    metadata:
+      name: caps
+    allowPrivilegeEscalation: true
+    allowPrivilegedContainer: false
+        allowedCapabilities: [CHOWN, NET_RAW, SYS_TIME]
+    defaultAddCapabilities: [SYS_TIME, NET_RAW]
+    requiredDropCapabilities: [MKNOD]
+    runAsUser:
+      type: RunAsAny
+    seLinuxContext:
+      type: RunAsAny
+    ```
+
+    Notice what the SCC permits. With this SCC, privileged containers are **not** allowed, but privilege escalation **is** allowed. The allowed capabilities are listed and so that only these 3 capabilities may be requested. In addition, 2 of the capabilities will be added to containers by default and just for good measure MKNOD will always be added to the capabilities drop list.
+
+1. Run the following `oc create` command to create the security context constraint.
+
+    ```bash
+    oc create -f caps.yaml
+    ```
+
+1. Run the following commands to create a service account and add our existing SCC to it.
+
+    ```bash
+    oc create sa caps-sa
+    oc adm policy add-scc-to-user caps -z caps-sa
+    ```
+
+### Step 2: Create the deployment
+
+1. Copy this YAML and save it to a file named deploy_caps.yaml (or download it from [here](static/deploy_caps.yaml)).
+
+    ```yaml
+    kind: Template
+    apiVersion: v1
+    metadata:
+      name: ${APP}-template
+    objects:
+    - kind: Deployment
+      apiVersion: apps/v1
+      metadata:
+        name: ${APP}
+      spec:
+        selector:
+          matchLabels:
+            app: ${APP}
+        template:
+          metadata:
+            labels:
+              app: ${APP}
+          spec:
+            serviceAccountName: caps-sa
+            containers:
+            - image: ubi8/ubi
+              name: ubi-cap-drops
+              command: ['sh', '-c', 'echo "Hello from user $(id -u) without extras" && sleep infinity']
+              securityContext:
+                privileged: false
+                capabilities:
+                  drop:
+                    - CHOWN
+                    - NET_RAW
+                    - SYS_TIME
+            - image: ubi8/ubi
+              name: ubi-cap-chown
+              command: ['sh', '-c', 'echo "Hello from user $(id -u) with chown added" && sleep infinity']
+              securityContext:
+                privileged: false
+                capabilities:
+                  add:
+                    - CHOWN
+                  drop:
+                    - NET_RAW
+    parameters:
+      - name: APP
+      - name: PROJECT
+    ```
+
+1. Process the template with APP and PROJECT parameters and create the deployment
+
+    Set a new APP name for your app. Make sure your PROJECT is also set in your shell.
+
+    ```bash
+    export APP=<your-app-name>
+    export PROJECT=<your-app-name>
+    ```
+
+    Process the template using APP and PROJECT parameters and create the deployment:
+
+    ```bash
+    oc process -f  deploy_caps.yaml -pAPP=$APP -pPROJECT=$PROJECT | oc create -f -
+    ```
+
+### Step 3. Examine their security settings
+
+Look at the pod YAML.  Check its:
+
+* Selected SCC
+* Security context for each of the 2 containers
+* The service account used
+
+Look for:
+
+* Settings that came from the deployment manifest (deploy_caps.yaml)
+* Settings that were influenced by the SCC (caps.yaml)
 
 ```yaml
-apiVersion: v1
-kind: Pod
-metadata:
-  name: ubi-cap
-  namespace: your-project
-spec:
-  containers:
-  - image: ubi8/ubi
-    name: flask-cap
-    command: ['sh', '-c', 'echo "Hello from user $(id -u) privileged" && sleep infinity']
+[ ... ]
+    openshift.io/scc: caps
+[ ... ]
     securityContext:
       capabilities:
         drop:
-          - NET_RAW
-          - CHOWN
-```
-
-```yaml
-apiVersion: v1
-kind: Pod
-metadata:
-  name: ubi-cap2
-  namespace: your-project
-spec:
-  containers:
-  - image: ubi8/ubi
-    name: flask-cap
-    command: ['sh', '-c', 'echo "Hello from user $(id -u) privileged" && sleep infinity']
+        - CHOWN
+        - MKNOD
+        - NET_RAW
+        - SYS_TIME
+      privileged: false
+[ ... ]
     securityContext:
       capabilities:
+        add:
+        - CHOWN
+        - SYS_TIME
         drop:
-          - NET_RAW
+        - MKNOD
+        - NET_RAW
+      privileged: false
+[ ... ]
+      serviceAccount: caps-sa
+      serviceAccountName: caps-sa
+[ ... ]
 ```
 
-Before going further, we should note that this was an example of **what not to do!**  This tutorial is about security and this example shows a lack of security. If your results were different, that's good. Perhaps your cluster and user are more locked-down.
+### Step 4. Demonstrate allowed and limited capabilities
 
-The rest of this tutorial is about security context **constraints** (SCCs). SCCs are meant to limit your permissions to create a more secure cluster.
+1. Start a remote shell session to see how things look inside the pod. Use the `-c ubi-cap-chown` flag to connect to the container that **can** change the ownership of files.
+
+    ```bash
+    oc rsh -c ubi-cap-chown <pod-name>
+    ```
+
+    This puts you in the container where we added the CHOWN capability.
+
+    In your remote shell, try the following commands to see an example of the security you get with typical container.
+
+    ```bash
+    whoami
+    id
+    echo hello > hellofile
+    ls -l hellofile
+    chown 1:1 hellofile
+    ls -l hellofile
+    cat hellofile
+    date
+    date -s 00:00:00
+    date
+    exit
+    ```
+
+    You should find that this container:
+
+    * Runs as root
+    * Can create a file and change its ownership
+    * Can set the time
+
+    The output looks like this:
+
+    ```bash
+    $ oc rsh -c ubi-cap-chown caps-65d747d869-8k4dc 
+
+    sh-4.4# whoami
+    root
+    sh-4.4# id
+    uid=0(root) gid=0(root) groups=0(root)
+    sh-4.4# echo hello > hellofile
+    sh-4.4# ls -l hellofile
+    -rw-rw-rw-. 1 root root 6 Feb 24 03:16 hellofile
+    sh-4.4# chown 1:1 hellofile
+    sh-4.4# ls -l hellofile
+    -rw-rw-rw-. 1 bin bin 6 Feb 24 03:16 hellofile
+    sh-4.4# cat hellofile
+    hello
+    sh-4.4# date
+    Wed Feb 24 03:20:59 UTC 2021
+    sh-4.4# date -s 00:00:00
+    Wed Feb 24 00:00:00 UTC 2021
+    sh-4.4# date
+    Wed Feb 24 00:00:01 UTC 2021
+    sh-4.4# exit
+    exit
+    ```
+
+1. Start a remote shell session to see how things look inside the other pod. Use the `-c ubi-cap-drops` flag to connect to the container that **cannot** change the ownership of files.
+
+    ```bash
+    oc rsh -c ubi-cap-drops <pod-name>
+    ```
+
+    You should find that this container:
+
+    * Also runs as root
+    * Can create a file, but **cannot** change its ownership
+    * **Cannot** set the time
+
+    The output looks like this:
+
+    ```bash
+    sh-4.4# whoami
+    root
+    sh-4.4# id
+    uid=0(root) gid=0(root) groups=0(root)
+    sh-4.4# echo hello > hellofile
+    sh-4.4# ls -l hellofile
+    -rw-rw-rw-. 1 root root 6 Feb 24 03:18 hellofile
+    sh-4.4# chown 1:1 hellofile
+    chown: changing ownership of 'hellofile': Operation not permitted
+    sh-4.4# date -s 00:00:00
+    date: cannot set date: Operation not permitted
+    Wed Feb 24 00:00:00 UTC 2021
+    sh-4.4# date
+    Wed Feb 24 03:19:24 UTC 2021
+    sh-4.4# exit
+    exit
+    ```
+
+    We successfully demonstrated that we can use a security context and an SCC to specify what capabilities are allowed (even for root). The SCC had a list of allowed capabilites, default capabilites, and capabilities that must be dropped.  The container security context was able to add capabilities (from the allowed list), drop capabilities that it specifically did not want the container to have, and also pick up default adds and required drops from the SCC.
 
 ## Scenario 6: Shared storage use cases
 

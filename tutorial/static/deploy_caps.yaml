@@ -1,0 +1,44 @@
+kind: Template
+apiVersion: v1
+metadata:
+  name: ${APP}-template
+objects:
+- kind: Deployment
+  apiVersion: apps/v1
+  metadata:
+    name: ${APP}
+  spec:
+    selector:
+      matchLabels:
+        app: ${APP}
+    template:
+      metadata:
+        name: ${APP}
+        labels:
+          app: ${APP}
+      spec:
+        serviceAccountName: caps-sa
+        containers:
+        - image: ubi8/ubi
+          name: ubi-cap-drops
+          command: ['sh', '-c', 'echo "Hello from user $(id -u) without extras" && sleep infinity']
+          securityContext:
+            privileged: false
+            capabilities:
+              drop:
+                - CHOWN
+                - NET_RAW
+                - SYS_TIME
+        - image: ubi8/ubi
+          name: ubi-cap-chown
+          command: ['sh', '-c', 'echo "Hello from user $(id -u) with chown added" && sleep infinity']
+          securityContext:
+            privileged: false
+            capabilities:
+              add:
+                - CHOWN
+              drop:
+                - NET_RAW
+parameters:
+  - name: APP
+  - name: PROJECT
