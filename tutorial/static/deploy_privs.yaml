@@ -1,0 +1,48 @@
+kind: Template
+apiVersion: v1
+metadata:
+  name: ${APP}-template
+objects:
+- kind: Deployment
+  apiVersion: apps/v1
+  metadata:
+    name: ${APP}
+  spec:
+    selector:
+      matchLabels:
+        app: ${APP}
+    template:
+      metadata:
+        name: ${APP}
+        labels:
+          app: ${APP}
+      spec:
+        serviceAccountName: privs-sa
+        containers:
+        - image: ubi8/ubi
+          name: priv-root
+          command: ['sh', '-c', 'echo "Hello from privileged user $(id -u)" && sleep infinity']
+          securityContext:
+            runAsUser: 0
+            privileged: true
+        - image: ubi8/ubi
+          name: priv-1234
+          command: ['sh', '-c', 'echo "Hello from privileged user $(id -u)" && sleep infinity']
+          securityContext:
+            runAsUser: 1234
+            privileged: true
+        - image: ubi8/ubi
+          name: non-priv-0
+          command: ['sh', '-c', 'echo "Hello from non-privileged user $(id -u)" && sleep infinity']
+          securityContext:
+            runAsUser: 0
+            privileged: false
+        - image: ubi8/ubi
+          name: non-priv-1234
+          command: ['sh', '-c', 'echo "Hello from non-privileged user $(id -u)" && sleep infinity']
+          securityContext:
+            runAsUser: 1234
+            privileged: false
+parameters:
+  - name: APP
+  - name: PROJECT

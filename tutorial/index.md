@@ -11,12 +11,8 @@ This tutorial will give you hands-on experience using security context controls 
 1. [User and group access controls with volumes](#scenario-3-user-and-group-access-controls-with-volumes)
 1. [Root and/or privileged container mitigation](#scenario-4-root-and/or-privileged-container-mitigation)
 1. [Add/drop Linux capabilities for finer control](#scenario-5-add/drop-linux-capabilities-for-finer-control)
-1. TODO: SELinux
-1. TODO: AppArmor
-1. TODO: Seccomp profiles
 1. [Shared storage use cases](#scenario-6-shared-storage-use-cases)
 1. [Network access use cases](#scenario-7-network-access-use-cases)
-1. TODO: More...?
 
 ## Concepts
 
@@ -27,7 +23,7 @@ Summarize and refer to the article and other links...
 > TODO: Some of these may need to be explained. Ideally very little...
 
 * Access to an OpenShift cluster
-* Admin permissions (more specifics TBD)
+* Cluster admin permission
 * Install the OpenShift CLI (oc)
 * Open a terminal
 * Create and/or switch to a project to work in
@@ -108,6 +104,7 @@ In this scenario, you will:
 
     pod/ubi-pod runs ubi8/ubi
     ```
+
 ### Step 2. Examine its security settings
 
 You can get the full YAML description of the pod to see details. For this tutorial, the interesting part is the annotation that shows what SCC was used, the container securityContext, and the pod securityContext.
@@ -529,64 +526,254 @@ This YAML will deploy the same application, but this time we are requesting some
 
 ## Scenario 4: Root and/or privileged container mitigation
 
-In this scenario, we'll learn how to run a container as root, as a privileged non-root user, and as regular user.
+In this scenario, you will:
 
-We'll be creating a *Deployment* which uses a template describing the desired pod/container specs. With a *Deployment* a *Replica Set* is created to validate the security contexts, start the pod(s) using a service account, and keep the desired number of pod instances running.
+1. Create an SCC and service account that allows you to deploy privileged containers running as any user
+1. Deploy 4 containers
+    * The first one is privileged and runs as root
+    * The second one is privileged and runs as non-root
+    * The third one is **not** privileged and runs as root
+    * The fourth one is **not** privileged and runs as non-root
+1. Examine their security settings
+1. Demonstrate allowed and limited capabilities
 
-### Step 1. Non-privileged user
+We'll be creating a *Deployment* which uses a template describing the desired pod and container states. With a *Deployment* a *Replica Set* is created to validate the security contexts, start the pod using a service account, and keep the desired number of pod instances running. If the service account is not assigned an SCC that can validate the requested security contexts, then the pod will not be created.
 
-Since the application is intended to run with a specific user ID and other restricted capabilities, we really should use a `securityContext` to request those capabilities.
+### Step 1: Create a service account and SCC with specific capabilities
 
-This YAML will deploy the same application, but this time we are requesting some specific security constraint requirements, including:
+1. Copy this YAML and save it to a file named privs.yaml (or download it from [here](static/privs.yaml)).
 
-* Run as user 1234
-* Create a file system group ID of 5678
-* Add capabilities: CHOWN and SETGID
-* Drop capabilities: SETUID, KILL, MKNOD
+    ```yaml
+    kind: SecurityContextConstraints
+    apiVersion: security.openshift.io/v1
+    metadata:
+      name: privs
+    allowPrivilegedContainer: true
+    runAsUser:
+      type: RunAsAny
+    seLinuxContext:
+      type: RunAsAny
+    ```
 
-#### Deploying the application with security context settings
+    Notice what the SCC permits. With this SCC, privileged containers are allowed, and running as root **is** allowed. Ideally you would not want to allow either. Using a Universal Base Image from Red Hat, you'll see that a Linux container that happily runs as root, can be just as functional and safer without root privileges.
 
-1. Copy (or download) this scc-template.yaml file.
+1. Run the following `oc create` command to create the security context constraint.
+
+    ```bash
+    oc create -f privs.yaml
+    ```
+
+1. Run the following commands to create a service account and add our existing SCC to it.
+
+    ```bash
+    oc create sa privs-sa
+    oc adm policy add-scc-to-user privs -z privs-sa
+    ```
+
+### Step 2: Create the deployment
+
+1. Copy this YAML and save it to a file named deploy_privs.yaml (or download it from [here](static/deploy_privs.yaml)).
+
+    ```yaml
+    kind: Template
+    apiVersion: v1
+    metadata:
+      name: ${APP}-template
+    objects:
+    - kind: Deployment
+      apiVersion: apps/v1
+      metadata:
+        name: ${APP}
+      spec:
+        selector:
+          matchLabels:
+            app: ${APP}
+        template:
+          metadata:
+            name: ${APP}
+            labels:
+              app: ${APP}
+          spec:
+            serviceAccountName: privs-sa
+            containers:
+            - image: ubi8/ubi
+              name: priv-root
+              command: ['sh', '-c', 'echo "Hello from privileged user $(id -u)" && sleep infinity']
+              securityContext:
+                runAsUser: 0
+                privileged: true
+            - image: ubi8/ubi
+              name: priv-1234
+              command: ['sh', '-c', 'echo "Hello from privileged user $(id -u)" && sleep infinity']
+              securityContext:
+                runAsUser: 1234
+                privileged: true
+            - image: ubi8/ubi
+              name: non-priv-0
+              command: ['sh', '-c', 'echo "Hello from non-privileged user $(id -u)" && sleep infinity']
+              securityContext:
+                runAsUser: 0
+                privileged: false
+            - image: ubi8/ubi
+              name: non-priv-1234
+              command: ['sh', '-c', 'echo "Hello from non-privileged user $(id -u)" && sleep infinity']
+              securityContext:
+                runAsUser: 1234
+                privileged: false
+    parameters:
+      - name: APP
+      - name: PROJECT
+    ```
+
+1. Process the template with APP and PROJECT parameters and create the deployment
+
+    Set a new APP name for your app. Make sure your PROJECT is also set in your shell.
+
+    ```bash
+    export APP=<your-app-name>
+    export PROJECT=<your-app-name>
+    ```
+
+    Process the template using APP and PROJECT parameters and create the deployment:
+
+    ```bash
+    oc process -f  deploy_privs.yaml -pAPP=$APP -pPROJECT=$PROJECT | oc create -f -
+    ```
+
+### Step 3. Examine their security settings
+
+Look at the pod YAML.  Check its:
+
+* Selected SCC
+* Service account
+* Security context for each of the 4 containers
+
+Look for:
+
+* The runAsUser (0 is root)
+* The privileged boolean
 
 ```yaml
-apiVersion: v1
-kind: Pod
-metadata:
-  name: ubi-privs
-spec:
-  containers:
-  - image: ubi8/ubi
-    name: priv-0
-    command: ['sh', '-c', 'echo "Hello from user $(user -u) privileged!!" && sleep infinity']
-    securityContext:
-      runAsUser: 0
-      privileged: true
-  - image: ubi8/ubi
-    name: priv-1234
-    command: ['sh', '-c', 'echo "Hello from user $(user -u) privileged!!" && sleep infinity']
-    securityContext:
-      runAsUser: 1234
-      privileged: true
-  - image: ubi8/ubi
-    name: non-priv-0
-    command: ['sh', '-c', 'echo "Hello from user $(user -u) non-privileged!!" && sleep infinity']
-    securityContext:
-      runAsUser: 0
-      privileged: false
-  - image: ubi8/ubi
-    name: non-priv-1234
-    command: ['sh', '-c', 'echo "Hello from user $(user -u) non-privileged!!" && sleep infinity']
-    securityContext:
-      runAsUser: 1234
-      privileged: false
+[ ... ]
+    openshift.io/scc: privs
+[ ... ]
+  serviceAccountName: privs-sa
+[ ... ]
+      name: priv-root
+[ ... ]
+      securityContext:
+        privileged: true
+        runAsUser: 0
+[ ... ]
+      name: priv-1234
+[ ... ]
+      securityContext:
+        privileged: true
+        runAsUser: 1234
+[ ... ]
+      name: non-priv-0
+[ ... ]
+      securityContext:
+        privileged: false
+        runAsUser: 0
+[ ... ]
+      name: non-priv-1234
+[ ... ]
+      securityContext:
+        privileged: false
+        runAsUser: 1234
+[ ... ]
+  serviceAccount: privs-sa
+[ ... ]
 ```
+
+### Step 4. Demonstrate allowed and limited capabilities
+
+1. Start a remote shell session to see how things look inside the pod. Use the `-c <container-name>` flag to connect to the container.
+
+    ```bash
+    oc rsh -c <container-name> <pod-name>
+    ```
+
+    This puts you in the container where we added the CHOWN capability.
+
+    In your remote shell, try the following commands to see an example of the security you with either of the privileged containers.
+
+    ```bash
+    whoami
+    id
+    echo hello > hellofile
+    ls -l hellofile
+    chown 1:1 hellofile
+    ls -l hellofile
+    cat hellofile
+    date
+    date -s 00:00:00
+    date
+    exit
+    ```
+
+    For example, in the remote shell for the `priv-1234` pod or the `priv-0` pod, your results should be something like this:
+
+    ```bash
+    sh-4.4$ whoami
+    1234
+    sh-4.4$ id
+    uid=1234(1234) gid=0(root) groups=0(root)
+    sh-4.4$ echo hello > hellofile
+    sh-4.4$ ls -l hellofile
+    -rw-rw-rw-. 1 1234 root 6 Feb 25 05:55 hellofile
+    sh-4.4$ chown 1:1 hellofile
+    sh-4.4$ ls -l hellofile
+    -rw-rw-rw-. 1 bin bin 6 Feb 25 05:55 hellofile
+    sh-4.4$ cat hellofile
+    hello
+    sh-4.4$ date
+    Thu Feb 25 05:56:07 UTC 2021
+    sh-4.4$ date -s 00:00:00
+    Thu Feb 25 00:00:00 UTC 2021
+    sh-4.4$ date
+    Thu Feb 25 00:00:01 UTC 2021
+    ```
+
+    You should find that both privileged containers can write a file and change ownership of a the file where you'd typically need root or `sudo` privileges to do either.
+
+    This should convince you that:
+
+    1. You don't need to be root, to be a super user (just privileged)
+    2. Allowing *privileged* should be avoided and only used in a tightly controlled way.
+
+    Next try similar commands in the non-privileged containers. When you find you cannot write to `hellofile`, just use `/tmp/hellofile` instead.
+
+    ```bash
+    sh-4.4$ whoami
+    1234
+    sh-4.4$ id
+    uid=1234(1234) gid=0(root) groups=0(root)
+    sh-4.4$ echo hello > hellofile
+    sh: hellofile: Permission denied
+    sh-4.4$ echo hello > /tmp/hellofile
+    sh-4.4$ ls -l /tmp/hellofile
+    -rw-rw-rw-. 1 1234 root 6 Feb 25 06:08 /tmp/hellofile
+    sh-4.4$ chown 1:1 /tmp/hellofile
+    chown: changing ownership of '/tmp/hellofile': Operation not permitted
+        sh-4.4$ date -s 00:00:00
+    date: cannot set date: Operation not permitted
+    Thu Feb 25 00:00:00 UTC 2021
+    ```
+
+    What you'll see is that, as you would expect in Linux, an non-root user cannot write to the root directory, but can write to /tmp. Also the non-root user cannot change the ownership to another user. Remember, this was not the case when we had the same user was privileged. The ability to change ownership was not taken away from root, so even a non-privileged root user has kept some privileges. Lastly we tried to set the time and found that root did not keep that capability. So it was a mixed bag for non-privileged root.
+
+    This is kind of a lot to sort out, but with these 4 containers you can quickly spin up and test the differences with root and/or privileged containers. To mitigate your security risk, you'd really like to take away **privileged** first and take away **root* next.
+
+    If only there was a way to avoid privileged and only give out the capabilities that the container really needs, right?  Let's say one container needs to set the time, but not change file ownership, and another container is the opposite. Well you can! You get to try that in the next scenario.
 
 ## Scenario 5: Add/drop Linux capabilities for finer control
 
 In this scenario, you will:
 
-1. Create a user and SCC that only allows specific Linux capabilities
-1. Create 2 pods with fine-grained capability constraints
+1. Create an SCC and service account that only allows specific Linux capabilities
+1. Deploy 2 containers with fine-grained capability constraints
     * One **can** change file ownership
     * The other **cannot** change file ownership
     * One specifically drops the ability to set the time
@@ -605,7 +792,7 @@ In this scenario, you will:
       name: caps
     allowPrivilegeEscalation: true
     allowPrivilegedContainer: false
-        allowedCapabilities: [CHOWN, NET_RAW, SYS_TIME]
+    allowedCapabilities: [CHOWN, NET_RAW, SYS_TIME]
     defaultAddCapabilities: [SYS_TIME, NET_RAW]
     requiredDropCapabilities: [MKNOD]
     runAsUser:
@@ -614,7 +801,7 @@ In this scenario, you will:
       type: RunAsAny
     ```
 
-    Notice what the SCC permits. With this SCC, privileged containers are **not** allowed, but privilege escalation **is** allowed. The allowed capabilities are listed and so that only these 3 capabilities may be requested. In addition, 2 of the capabilities will be added to containers by default and just for good measure MKNOD will always be added to the capabilities drop list.
+    Notice what the SCC permits. With this SCC, privileged containers are **not** allowed, but privilege escalation **is** allowed. The allowed capabilities are listed so that only these 3 capabilities may be requested. In addition, 2 of the capabilities will be added to containers by default and just for good measure MKNOD will always be added to the capabilities drop list.
 
 1. Run the following `oc create` command to create the security context constraint.
 
