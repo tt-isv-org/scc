@@ -697,7 +697,7 @@ Look for:
 
     This puts you in the container where we added the CHOWN capability.
 
-    In your remote shell, try the following commands to see an example of the security you with either of the privileged containers.
+    In your remote shell, try the following commands to see an example of the relaxed security you have with either of the privileged containers.
 
     ```bash
     whoami
@@ -762,7 +762,7 @@ Look for:
     Thu Feb 25 00:00:00 UTC 2021
     ```
 
-    What you'll see is that, as you would expect in Linux, an non-root user cannot write to the root directory, but can write to /tmp. Also the non-root user cannot change the ownership to another user. Remember, this was not the case when we had the same user was privileged. The ability to change ownership was not taken away from root, so even a non-privileged root user has kept some privileges. Lastly we tried to set the time and found that root did not keep that capability. So it was a mixed bag for non-privileged root.
+    What you'll see is that, as you would expect in Linux, a non-root user cannot write to the root directory, but can write to /tmp. Also the non-root user cannot change the ownership to another user. Remember, this was not the case when the same user was privileged. The ability to change ownership was not taken away from root, so even a non-privileged root user has kept some privileges. Lastly we tried to set the time and found that root did not keep that capability. So it was a mixed bag for non-privileged root.
 
     This is kind of a lot to sort out, but with these 4 containers you can quickly spin up and test the differences with root and/or privileged containers. To mitigate your security risk, you'd really like to take away **privileged** first and take away **root* next.
 
