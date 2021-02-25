@@ -600,4 +600,4 @@ TODO: add more detail. Are the SCCs merged? What if one SCC allows, but is lower
 
 ## Summary
 
-TODO - point to the tutorial for more details and hands on exercises
+TODO - point to the tutorial for more details and hands on exercises.  
