@@ -1,36 +1,51 @@
 # Red Hat OpenShift security practices using security context contraints
 
-**SCC** stands for Security Content Contraints, and it is the tool provided by OpenShift to control what privileges can be granted to a pod when deployed on a Red Hat OpenShift Container Platform.
+This article is intended for those interested in how to maintain a secure **Red Hat OpenShift** cluster. This includes cluster administrators, who's first priority is to protect and control system resources, and application developers, who may require the use of those same resources.
 
-## What are SCCs and why do you need them?
+The specific type of security we will be discussing is **pod security**. When pods are deployed on an OpenShift cluster, they must be constrained to only perform actions and access resources allowed by an administrator.
 
-Administrators use SCCs to limit what actions a pod is permitted to perform.
+A pod deployed on a secure OpenShift cluster should not, by default, be allowed to perform any "privileged" action, such as:
 
-A secure OpenShift container platform should not, by default, allow a pod to perform any "privileged" actions, such as:
+* access storage owned by different users or groups
+* allow network access to reserved or protected ports
+* run as a privileged user
 
-* access storage
-* modify network settings
-* run using a specific user or group ID
+## A pod security use case
 
-But what if your pod needs to perform one of these actions? For example, you have developed an application that needs to read and write data to a storage volume that has an group ID of "1234". In order to access the volume, the pod containing the application needs to run using this same group ID.
+You develop a stand-alone application that writes to a file in a directory, and it works. You can run it multiple times and it continues to work because you are always running as the same user.
 
-How do we solve this problem? This is where SCCs come in.
+You deploy that same application on an OpenShift cluster, which typically means running at scale with multiple pods -- each attempting to read and write to the same file. Your application fails with file permission errors because each pod is running as a different user (i.e. user 1 can't access files created by user 2).
 
-SCCs define what actions the pod is allowed to perform. In the same way that it can prevent a pod from performing any "privileged" actions, it can also agree to allow the pod certain privileges so that it can run successfully.
+A common method of solving this issue is to use groups for access control. When a directory is owned by a specific group, it allows access to any user who is a member of that group.
 
-## How a pod requests special privileges
+Using that approach, the solution to your problem is to ensure that:
 
-In order to peform privileged actions, a pod must request "permission" via the deployment manifest. This manifest is associated with an SCC, which then decides if the requested permissions can be granted.
+1. The pod sets the directory group to a specific value.
+2. All replica pods run using that same group value.
 
-As a best-practice, SCCs should be developed to be as limiting as possible. Instead of simply (and unsafely) allowing the pod to run as a "privileged" user (e.g. run as "root"), it should only allow the specific actions that are being requested.
+And how do you do that? Since OpenShift won't allow you to do either of these "privileged" actions, you must first ask for permission. On OpenShift, requesting special permissions is accomplished using **SCCs**.
+
+## What is an SCC?
+
+**SCC** stands for Security Content Contraints, and it is the tool provided by OpenShift to control what permissions can be granted to a pod when deployed on a Red Hat OpenShift cluster.
+
+SCCs define what actions the pod is allowed to perform. In the same way that it can prevent a pod from performing any "privileged" actions, it can also agree to allow the pod certain permissions so that it can run successfully.
+
+## How a pod requests additional permissions
+
+In order to perform privileged actions, a pod must request "permission" via the deployment manifest - specifically using the **security context** section of the manifest. The manifest is then linked to an SCC, which decides if the requested permissions can be granted.
+
+As a best-practice, SCCs should be developed to be as limiting as possible. Instead of simply (and unsafely) allowing the pod to run as a "privileged" user (e.g. run as "root"), it should attempt to only allow the specific actions that are being requested.
 
 Another way to envision this relationship is to think of the SCC as a lock protecting system resources, and the manifest being the key. The deployment is only successful if the key fits.
+
+Here we show that relationship, in one case against a very restricted SCC, and the other against a custom built SCC.
 
 ![capabilities](images/capabilities.png)
 
 ## The big picture
 
-To better understand how SCCs are used to control access on a Red Hat OpenShift Container Platform, let's walk-through a common deployment scenario.
+To better understand how SCCs are used to control access on a Red Hat OpenShift cluster, let's walk-through a common deployment scenario.
 
 First, let's identify the personas that are typically involved in the process of developing an application, configuring a pod to contain the application, and then deploying that application on OpenShift.
 
@@ -38,7 +53,7 @@ First, let's identify the personas that are typically involved in the process of
 * **Deployer** - responsible for creating the deployment manifest that will define how the application will be run.
 * **OpenShift User** - a user account granted deployment permissions by the OpenShift administrator.
 * **OpenShift Service Account** - a special type of user account that can be created to be associated with one or more SCCs.
-* **OpenShift Administrator** - ensures the security of the OpenShift platform by granting access to protected resources only as needed.
+* **OpenShift Administrator** - ensures the security of the OpenShift cluster by granting access to protected resources only as needed.
 
 Administrators use RBAC (role-based access control) resources to control user access. In our scenario, the administrator will create an **OpenShift User** account that has the permission to deploy pods. The **Deployer** can then use that account to create and deploy the pod on OpenShift. The **Deployer** performs this task by creating a **deployment manifest**, which links to the application and provides instructions on how the application should be deployed and ran.
 
@@ -70,17 +85,51 @@ Here is an overview of how user and service accounts, roles, deployment manifies
 1. If the associated SCC cannot provide all of the permissions the deployment manifest requests, the deployment will fail.
 1. Otherwise, the deployment will create the pod and run the application.
 
-Now that we have a high-level view of how deployment manifests work with SCCs on OpenShift, let's dig into the details.
+## Details
+
+The remainder of this articles digs into the details on how to properly utilize SCCs. The topics covered include:
+
+* [Types of permissions that can be requested](#-types-of-permissions-that-can-be-requested)
+  * [Privileges](#-privileges)
+  * [Access Control](#-access-control)
+  * [Capabilities](#-capabilities)
+* [Pre-defined SCCs](#-pre-defined-sccs)
+* [Managing SCCs](#-managing-sccs)
+* [Creating custom SCCs](#creating-custom-sccs)
+* [Important resources used by SCCs](#-important-resources-used-by-sccs)
+  * [Project namespace](#-project-namespace)
+  * [RBAC roles](#-rbac-roles)
+  * [Service accounts](#-service-accounts)
+* [How to link service accounts to SCCs](#-how-to-link-service-accounts-to-sccs)
+  * [Assign SCCs to RBAC roles](#-assign-sccs-to-rbac-roles)
+  * [Assign service accounts to SCCs](#-assign-service-accounts-to-sccs)
+* [Deployment manifest](#-deployment-manifests)
+* [Putting it all together](#-putting-it-all-together)
+  * [Deployment Vs. Restricted SCC](#-deployment-vs.-restricted-scc)
+  * [Deployment Vs. Custom SCC](#-deployment-vs.-custom-scc)
+* [SCC admission process](#-scc-admission-process)
+* [Summary](#-summary)
 
 ## Types of permissions that can be requested
 
 Up to this point we have used the generic term "permissions" to describe what pods can request (via the deployment manifest) and what SCCs will allow. In reality, "permissions" consist of 3 specific types - privileges, access control, and capabilities. Each with its own set of rules and syntax.
 
+In the following sections, we show some of available fields and values that can be used - from both the deployment manifest side (asking permission), and the SCC side (granting permission).
+
+**IMPORTANT**: To be specific, the **security context** section of the deployment manifest is where permission requests are made.
+
 ### Privileges  
 
-* **allowPrivilegedContainer** - can a pod run privileged containers
-* **allowHostNetwork** TODO
-* **aloowHostPorts**
+These settings allow general authority the pod will have when deployed.
+
+In the SCC, you allow the privilege by setting the value to **true**. For example:
+
+* **allowPrivilegedContainer: true** - can a pod run privileged containers
+* **allowPrivilegeEscalation: true**
+
+In the deployment manifest, these privileges are requested at the pod level.
+
+* **securityContext: true**
 
 ### Access Control
 
@@ -144,7 +193,7 @@ If not specified, the **restricted** SCC will be used.
 
 ## Managing SCCs
 
-Administrators can manage the SCCs on the OpenShift platform via the OpenShift CLI.
+Administrators can manage the SCCs on the OpenShift cluster via the OpenShift CLI.
 
 ```bash
 oc get scc
@@ -287,7 +336,7 @@ Settings:
     Ranges:                     5000-6000
 ```
 
-## Important resources in SCC processing
+## Important resources used by SCCs
 
 Once we have decided which SCC to use (pre-existing or custom), how do we link to it in our deployment?
 
@@ -335,7 +384,7 @@ The annotations define default values for (in order): SELinux options, group IDs
 
 On OpenShift, an administrator can create a **Role** with a rule to define which SCCs will be available for all the users associated with that role.
 
-There are 2 types of RBAC roles, **local** roles are limited to specific projects, while **cluster** roles apply to the entire OpenShift platform and all projects. For our scenario, we will just focus on **local** roles.
+There are 2 types of RBAC roles, **local** roles are limited to specific projects, while **cluster** roles apply to the entire OpenShift cluster and all projects. For our scenario, we will just focus on **local** roles.
 
 To create a local role named `my-custom-role` that points to our custom SCC, use the command:
 
@@ -462,7 +511,7 @@ Note that our custom service account is now associated with our custom role.
 
 ![sa-to-role-to-scc](images/sa-to-role-to-scc.png)
 
-### Assign service accounts to an SCC
+### Assign service accounts to SCCs
 
 Another approach is to directly assign a service account to an SCC.
 
@@ -545,7 +594,7 @@ The first set of `securityContext` values are associated with the pod. The entri
 
 The second set of `securityContext` values are associated with specific containers running inside the pod. For example:
 
-* **capabilities - add** - requests that the `web-app-containter` container be allowed the `NET_ADMIN` and `SYS_TIME` capabilities .
+* **capabilities:add** - requests that the `web-app-containter` container be allowed the `NET_ADMIN` and `SYS_TIME` capabilities .
 
 ## Putting it all together
 
@@ -600,4 +649,8 @@ TODO: add more detail. Are the SCCs merged? What if one SCC allows, but is lower
 
 ## Summary
 
-TODO - point to the tutorial for more details and hands on exercises.  
+Hopefully you now have a good understanding of what SCCs are, and how you can use them to enforce pod security on an OpenShift cluster.
+
+You learned that **SCCs** are used to restict pod capablities, and that they can be tailored to allow specific pod permissions when requested in a **deployment manifest**. And you learned you can connect the deployment manifest to the SCC through a **service account**, either directly or by way of an **RBAC role**.
+
+To get hands-on experience using SCCs, there is a tutorial that was created to accompany this article. It can be found at [https://github.ibm.com/TT-ISV-org/scc/blob/main/tutorial/index.md](https://github.ibm.com/TT-ISV-org/scc/blob/main/tutorial/index.md).
