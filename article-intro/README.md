@@ -114,7 +114,7 @@ The remainder of this articles digs into the details on how to properly utilize 
 
 Up to this point we have used the generic term "permissions" to describe what pods can request (via the deployment manifest) and what SCCs will allow. In reality, "permissions" consist of 3 specific types - privileges, access control, and capabilities. Each with its own set of rules and syntax.
 
-In the following sections, we show some of available fields and values that can be used - from both the deployment manifest side (asking permission), and the SCC side (granting permission).
+In the following sections, we show some of available fields and the values that can be used - from both the deployment manifest side (asking permission), and the SCC side (granting permission).
 
 **IMPORTANT**: To be specific, the **security context** section of the deployment manifest is where permission requests are made.
 
@@ -122,33 +122,32 @@ In the following sections, we show some of available fields and values that can 
 
 These settings allow general authority the pod will have when deployed.
 
-In the SCC, you allow the privilege by setting the value to **true**. For example:
+In the SCC, you allow the privilege by setting the value to **true**. Here are some example privileges:
 
-* **allowPrivilegedContainer: true** - can a pod run privileged containers
-* **allowPrivilegeEscalation: true**
+* **allowPrivilegedContainer** - specifies if a pod can run privileged containers.
+* **allowPrivilegeEscalation** - specifies if a child process of a container can gain more privileges than its parent.
 
-In the deployment manifest, these privileges are requested at the pod level.
+In the deployment manifest, you can request these privileges at the container level. For example:
 
-* **securityContext: true**
+* **containers.securityContext.privileged: true**
 
 ### Access Control
 
-Controls what specific user or group ID a pod may run as.
+Controls what specific user and group values a pod can run as.
 
 In the SCC, The list of fields that can be set include:
   
-* **RunAsUser** - specifies the allowable range of user IDs used for running all the containers in the pod.
-* **SupplementalGroups** - specifies the allowable range of group IDs used for rulling all the containers in the pod.
-* **FSGroup** -  specifies the allowable range of group IDs used for controlling pod storage volumes.
-* **SELinuxContext** - specifies the allowable values used for setting the SELinux context, suas SELinux user, role, type and level.
+* **runAsUser** - specifies the allowable range of user IDs used for running all the containers in the pod.
+* **supplementalGroups** - specifies the allowable range of group IDs used for rulling all the containers in the pod.
+* **fsGroup** -  specifies the allowable range of group IDs used for controlling pod storage volumes.
+* **seLinuxContext** - specifies the allowable values used for setting the SELinux context, which includes SELinux user, role, type and level.
 
-In the deployment manifest, these values are set at the pod level and pertain to all containers running within the pod. The fields used are:
+In the deployment manifest, these values can either be requested at the pod level and pertain to all containers running within the pod, or at the specific container level. The fields used are:
 
 * **securityContext.runAsUser** - request to run under a specific user ID.
 * **securityContext.runAsGroup** - request to run under a specific group ID.
 * **securityContext.fsGroup** - request to run under a specific group ID for accessing storage volumes.
-* **securityContext.XXXXXX** - request to run using a specific SELinux context.
-TODO
+* **securityContext.seLinuxOptions** - request to run using a specific SELinux context set of labels.
 
 ### Capabilities
 
@@ -168,13 +167,16 @@ The list of actions includes:
 
 A full list of values can be found [here](https://github.com/torvalds/linux/blob/master/include/uapi/linux/capability.h)
 
-Capabilities are specified in the SCC using the following fields:
+Capabilities are contolled in the SCC using the following fields:
 
-* **defaultAddCapabilities** - list of default capabilities added to each container.
+* **defaultAddCapabilities** - list of default capabilities automatically added to each container.
 * **requiredDropCapabilities** - list of capabilities that will be forbidden to run on each container.
 * **allowedCapabilities** - list of container capabilities that are allowed to be requested by the demployment manifest.
 
-Capabilities are requested in the deployment manifest using the **securityContext.capabilities.add** field.
+Capabilities are requested in the deployment manifest using:
+
+* **containers.securityContext.capabilities.add**
+* **containers.securityContext.capabilities.drop**
 
 ## Pre-defined SCCs
 
