@@ -96,6 +96,7 @@ The remainder of this articles digs into the details on how to properly utilize 
 * [Pre-defined SCCs](#-pre-defined-sccs)
 * [Managing SCCs](#-managing-sccs)
 * [Creating custom SCCs](#creating-custom-sccs)
+  * [Seccomp](#Seccomp)
 * [Important resources used by SCCs](#-important-resources-used-by-sccs)
   * [Project namespace](#-project-namespace)
   * [RBAC roles](#-rbac-roles)
@@ -335,6 +336,12 @@ Settings:
   Supplemental Groups Strategy: MustRunAs
     Ranges:                     5000-6000
 ```
+
+### Seccomp
+
+Seccomp is a Linux kernel secuirty feature. When enabled this prevents a majority of system from being made by the container, eliminating most common vaulnerabities. Seccomp is maintained by a whitelist profile that can be added to for custom use and is unique to each base image profile.
+
+Here is an example of a RedHat linux image [RedHat Linux capabilites and Seccomp](https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux_atomic_host/7/html/container_security_guide/linux_capabilities_and_seccomp).
 
 ## Important resources used by SCCs
 
