@@ -39,14 +39,14 @@ The "big picture" concepts from the article are summarized with the following fl
     * Deploy a workload using a Universal Base Image
     * Examine the default security contexts and SCC
     * Test your containers runtime permissions
-1. [Attempt to redeploy with a security context](#-attempt-to-redeploy-with-a-security-context)
+1. [Attempt to redeploy with a security context](#attempt-to-redeploy-with-a-security-context)
     * Request special privileges for your deployment
     * See how a deployment fails when requesting privileges that have not been assigned
-1. [Create and assign a security context constraint](#-create-and-assign-a-security-context-constraint)
+1. [Create and assign a security context constraint](#create-and-assign-a-security-context-constraint)
     * Create an SCC to allow your deployment's security contexts
     * Create a new service account for your deployment
     * Use role-based access control (RBAC) to assign the SCC to the role
-1. [Create the deployment again with the security contexts](#-create-the-deployment-again-with-the-security-contexts)
+1. [Create the deployment again with the security contexts](#create-the-deployment-again-with-the-security-contexts)
     * Now the deployment can be validated with an SCC
     * Examine the resulting security contexts and selected SCC
     * Test your containers new runtime permissions
