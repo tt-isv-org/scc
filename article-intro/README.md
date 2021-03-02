@@ -652,7 +652,7 @@ SCCs have a priority field that affects the ordering when a pod request is valid
 * If both priorities and restrictions are equal the SCCs will be sorted by name
 
 Here are two Examples:
-First: we will create an scc called ***scc-priority-sample*** with **RunAsAny** and increate the priority to 11 (note **anyuid** has a priority 10).  When we then create a pod, I am using the example pod. Checking the yaml of the pod shows ***openshift.io/scc: scc-priority-sample***, with **RunAsAny** applied from that SCC.
+First, we will create an scc called ***scc-priority-sample*** with **RunAsAny** and increate the priority to 11 (note **anyuid** has a priority 10).  When we then create a pod, I am using the example pod. Checking the yaml of the pod shows ***openshift.io/scc: scc-priority-sample***, with **RunAsAny** applied from that SCC.
 
 SCC:
 
@@ -707,7 +707,7 @@ metadata:
   name: scc-sample-pod
 ```
 
-Note that in these two examples we are allowing the SCCs to be applied through out the cluster. SCCs on local or cluster access will not alter the priority or restriction.
+Note that in these two examples we are allowing the SCCs to be applied through out the cluster. SCCs on local or cluster access will not alter the priority or restriction.  As well as SCCs are not merged, one is accepted and the rest are ignored.
 
 ## Summary
 
