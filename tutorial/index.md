@@ -39,9 +39,9 @@ The "big picture" concepts from the article are summarized with the following fl
     * Deploy a workload using a Universal Base Image
     * Examine the default security contexts and SCC
     * Test your containers runtime permissions
-1. [Attempt to redeploy with a security context](#attempt-to-redeploy-with-a-security-context)
-    * Request special privileges for your deployment
-    * See how a deployment fails when requesting privileges that have not been assigned
+1. [Attempt to redeploy with security contexts](#attempt-to-redeploy-with-security-contexts)
+    * Request special permissions for your deployment
+    * See how a deployment fails when requesting permissions that have not been assigned
 1. [Create and assign a security context constraint](#create-and-assign-a-security-context-constraint)
     * Create an SCC to allow your deployment's security contexts
     * Create a new service account for your deployment
@@ -229,14 +229,15 @@ You can use the OpenShift Web Console or use `oc` commands in your terminal to s
     * This uid has been assigned to the root group (ID 0) and also an additional group which has a group ID that is the same as the uid. This is the `fsGroup` that we saw assigned in the pod `securityContext`.
     * This `fsGroup` is set as the owner of the mounted volume.
 
-## Attempt to redeploy with a security context
+## Attempt to redeploy with security contexts
 
 Let's say we are deploying an application where we need to control the user ID and group ID used for data access. It is a common practice to use group IDs for data access.
 
 The first thing we need to do is use security contexts in our deployment manifest to specify the expected user ID and group IDs for our pod and container.
 
 These security contexts are validated against SCCs that are assigned to the service account. If there is not an SCC that can validate the security contexts, then the pod will not be started.
-### Request special privileges for your deployment
+
+### Request special permissions for your deployment
 
 This YAML will deploy the same application, but this time we are requesting some specific security constraint requirements including to give us our data access control:
 
@@ -487,7 +488,7 @@ Use the OpenShift Web Console or use `oc` commands in your terminal to see the r
         * Find `deploy3`
         * `Status` should say `1 of 1 pods`
 
-        ![deploy1_status.png](images/deploy1_status.png)
+        ![deploy3_status.png](images/deploy3_status.png)
 
     * Check the details of your pod:
 
@@ -499,15 +500,16 @@ Use the OpenShift Web Console or use `oc` commands in your terminal to see the r
         * Shown in `annotations`
         * Our default deployment got our new `scc-tutorial-scc` SCC
 
-        ![deploy1_scc.png](images/deploy1_scc.png)
+        ![deploy3_scc.png](images/deploy3_scc.png)
 
     * Scroll down to see the pod spec:
 
-        * `ServiceAccountName` is `scc-tutorial-sa`
         * `SecurityContext` for the pod was given `fsGroup: 5555` and `supplementalGroups: [5777, 5888]`
-        * `SecurityContext` for the container was given `runAsUser: 1234`, `runAsGroup: 5678`.
+        * `SecurityContext` for the container was given `runAsUser: 1234` and `runAsGroup: 5678`.
+        * The volume was mounted at `/var/opt/deploy3/data`
+        * `ServiceAccountName` is `scc-tutorial-sa` (the service account we just created and assigned our one SSC)
 
-        ![deploy1_spec.png](images/deploy1_spec.png)
+        ![deploy3_spec.png](images/deploy3_spec.png)
 
 ### Test your container runtime permissions
 
@@ -575,28 +577,35 @@ Use the OpenShift Web Console or use `oc` commands in your terminal to see the r
         * Select `Deployments`
         * `Status` should say `1 of 1 pods`
 
-        ![deploy1_terminal.png](images/deploy1_terminal.png)
+        ![deploy3_terminal.png](images/deploy3_terminal.png)
 
 1. Consider the results
 
-    * We did not specify any user ID or group ID in our deployment manifest.
-    * The user ID (uid) is the one that we saw assigned in the container `securityContext.runAsUser`.
-    * This uid has been assigned to the root group (ID 0) and also an additional group which has a group ID that is the same as the uid. This is the `fsGroup` that we saw assigned in the pod `securityContext`.
-    * This `fsGroup` is set as the owner of the mounted volume.
+    * You are **not** running as root or using the project's default 10 digit user ID range. You could've (should've?) used the project default, but was nice to see we can control this. This just might be the simplest example to prove you can use an SCC.
+
+    * You are running with the gid from `RunAsGroup` and have been added to the `supplementalGroups` and `fsGroup` as well.
+
+    * You cannot write in the root directory. You are not root or a privileged user!
+
+    * The volume was mounted at the path in your spec in a directory owned by `root:5555`. This group ownership came from the `fsGroup` setting.
+
+    * Since you were automatically added to the `fsGroup`, you can write a file to the volume.
+
+    * You tested that you cannot change the file ownership to anything the way a priveleged user could, but for a file owned by you, you can change the group to one of the groups you are assigned to.
 
 ## Shared storage use cases
 
 * NFS example
     * Each pod can write to and read from the other pod via the file system
         * Shared storage
-        * PersistantVolumeClaim
+        * PersistentVolumeClaim
         * volumeMode: Filesystem
         * 2 pods RWX (same project/namespace)
 
 * Block storage example
     * Write to storage, kill pod, a new pod mounts and reads/writes to the same volume without data loss.
         * 1 pod RWO
-        * PersistantVolumeClaim
+        * PersistentVolumeClaim
         * Retain
 
 ## Conclusion
