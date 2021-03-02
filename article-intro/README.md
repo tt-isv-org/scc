@@ -651,8 +651,63 @@ SCCs have a priority field that affects the ordering when a pod request is valid
 * If priorities are equal, the SCCs will be sorted from most restrictive to least restrictive
 * If both priorities and restrictions are equal the SCCs will be sorted by name
 
-TODO: show deployment yaml after deployment to see which SCC was used
-TODO: add more detail. Are the SCCs merged? What if one SCC allows, but is lower priority of another SCC that fails?
+Here are two Examples:
+First: we will create an scc called ***scc-priority-sample*** with **RunAsAny** and increate the priority to 11 (note **anyuid** has a priority 10).  When we then create a pod, I am using the example pod. Checking the yaml of the pod shows ***openshift.io/scc: scc-priority-sample***, with **RunAsAny** applied from that SCC.
+
+SCC:
+
+```yaml
+kind: SecurityContextConstraints
+apiVersion: security.openshift.io/v1
+metadata:
+  name: scc-priority-sample
+allowPrivilegedContainer: true
+runAsUser:
+  type: RunAsAny
+seLinuxContext:
+  type: RunAsAny
+fsGroup:
+  type: RunAsAny
+supplementalGroups:
+  type: RunAsAny
+users:
+- my-admin-user
+groups:
+- my-admin-group
+priority: 11
+```
+
+Pod:
+
+```yaml
+kind: Pod
+apiVersion: v1
+metadata:
+  annotations:
+  ...
+    openshift.io/scc: scc-priority
+  selfLink: /api/v1/namespaces/scc-sample/pods/hello-world
+  ...
+  name: hello-world
+```
+
+If we attempt the same example but set the priority of ***scc-priority-sample*** to 10 such that is matches the **anyuid** then the ***addmission controller*** will choose **anyuid** and ignore our ***scc-priority-sample*** as **anyuid** will be more restrictive then our sample.
+
+Pod:
+
+```yaml
+kind: Pod
+apiVersion: v1
+metadata:
+  annotations:
+    ...
+    openshift.io/scc: anyuid
+  selfLink: /api/v1/namespaces/scc-sample/pods/scc-sample-pod
+  resourceVersion: '2149158'
+  name: scc-sample-pod
+```
+
+Note that in these two examples we are allowing the SCCs to be applied through out the cluster. SCCs on local or cluster access will not alter the priority or restriction.
 
 ## Summary
 
