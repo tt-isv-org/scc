@@ -116,7 +116,7 @@ The remainder of this articles digs into the details on how to properly utilize 
 
 Any discussion of SCCs needs to be in the context of an OpenShift project namespace, which plays a major role in how SCCs are defined, managed, and utilized.
 
-OpenShift projects are the mechanism to scope resources in a cluster and are used by administrators to limit and isolate resources. These resources inlude users, deployments, and SCCs.
+OpenShift projects are the mechanism to scope resources in a cluster and are used by administrators to limit and isolate resources. These resources include users, deployments, and SCCs.
 
 ## Types of permissions that can be requested
 
