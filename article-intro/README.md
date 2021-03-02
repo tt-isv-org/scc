@@ -97,6 +97,7 @@ The remainder of this articles digs into the details on how to properly utilize 
 * [Pre-defined SCCs](#-pre-defined-sccs)
 * [Managing SCCs](#-managing-sccs)
 * [Creating custom SCCs](#creating-custom-sccs)
+  * [Seccomp](#Seccomp)
 * [Important resources used by SCCs](#-important-resources-used-by-sccs)
   * [Project namespace](#-project-namespace)
   * [RBAC roles](#-rbac-roles)
@@ -347,6 +348,12 @@ Settings:
   Supplemental Groups Strategy: MustRunAs
     Ranges:                     5000-6000
 ```
+
+### Seccomp
+
+Seccomp is a Linux kernel secuirty feature. When enabled this prevents a majority of system calls from being made by the container, eliminating most common vaulnerabities. Seccomp is maintained by a whitelist profile that can be added to for custom use and is unique to each base image profile.
+
+Here is an example of a RedHat linux image [RedHat Linux capabilites and Seccomp](https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux_atomic_host/7/html/container_security_guide/linux_capabilities_and_seccomp).
 
 ## Important resources used by SCCs
 
@@ -655,6 +662,64 @@ SCCs have a priority field that affects the ordering when a pod request is valid
 * Highest priority first, nil is considered a 0 priority
 * If priorities are equal, the SCCs will be sorted from most restrictive to least restrictive
 * If both priorities and restrictions are equal the SCCs will be sorted by name
+
+Here are two Examples:
+First, we will create an scc called ***scc-priority-sample*** with **RunAsAny** and increate the priority to 11 (note **anyuid** has a priority 10).  When we then create a pod, I am using the example pod. Checking the yaml of the pod shows ***openshift.io/scc: scc-priority-sample***, with **RunAsAny** applied from that SCC.
+
+SCC:
+
+```yaml
+kind: SecurityContextConstraints
+apiVersion: security.openshift.io/v1
+metadata:
+  name: scc-priority-sample
+allowPrivilegedContainer: true
+runAsUser:
+  type: RunAsAny
+seLinuxContext:
+  type: RunAsAny
+fsGroup:
+  type: RunAsAny
+supplementalGroups:
+  type: RunAsAny
+users:
+- my-admin-user
+groups:
+- my-admin-group
+priority: 11
+```
+
+Pod:
+
+```yaml
+kind: Pod
+apiVersion: v1
+metadata:
+  annotations:
+  ...
+    openshift.io/scc: scc-priority
+  selfLink: /api/v1/namespaces/scc-sample/pods/hello-world
+  ...
+  name: hello-world
+```
+
+If we attempt the same example but set the priority of ***scc-priority-sample*** to 10 such that is matches the **anyuid** then the ***addmission controller*** will choose **anyuid** and ignore our ***scc-priority-sample*** as **anyuid** will be more restrictive then our sample.
+
+Pod:
+
+```yaml
+kind: Pod
+apiVersion: v1
+metadata:
+  annotations:
+    ...
+    openshift.io/scc: anyuid
+  selfLink: /api/v1/namespaces/scc-sample/pods/scc-sample-pod
+  resourceVersion: '2149158'
+  name: scc-sample-pod
+```
+
+Note that in these two examples we are allowing the SCCs to be applied through out the cluster. SCCs on local or cluster access will not alter the priority or restriction.  As well as SCCs are not merged, one is accepted and the rest are ignored.
 
 ## Summary
 
