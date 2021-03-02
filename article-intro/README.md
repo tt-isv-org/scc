@@ -339,7 +339,7 @@ Settings:
 
 ### Seccomp
 
-Seccomp is a Linux kernel secuirty feature. When enabled this prevents a majority of system from being made by the container, eliminating most common vaulnerabities. Seccomp is maintained by a whitelist profile that can be added to for custom use and is unique to each base image profile.
+Seccomp is a Linux kernel secuirty feature. When enabled this prevents a majority of system calls from being made by the container, eliminating most common vaulnerabities. Seccomp is maintained by a whitelist profile that can be added to for custom use and is unique to each base image profile.
 
 Here is an example of a RedHat linux image [RedHat Linux capabilites and Seccomp](https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux_atomic_host/7/html/container_security_guide/linux_capabilities_and_seccomp).
 
