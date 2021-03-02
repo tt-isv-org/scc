@@ -1,0 +1,22 @@
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: deploy1
+    spec:
+      selector:
+        matchLabels:
+          app: deploy1
+      template:
+        metadata:
+          labels:
+            app: deploy1
+        spec:
+          containers:
+          - image: ubi8/ubi-minimal
+            name: ubi-minimal
+            command: ['sh', '-c', 'echo "Hello from user $(id -u)" && sleep infinity']
+          serviceAccountName: default
+          volumes:
+          - emptyDir: {}
+            name: data
+
