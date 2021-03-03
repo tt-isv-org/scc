@@ -89,6 +89,7 @@ Here is an overview of how user and service accounts, roles, deployment manifies
 
 The remainder of this articles digs into the details on how to properly utilize SCCs. The topics covered include:
 
+* [OpenShift projects](#-openshift-projects)
 * [Types of permissions that can be requested](#-types-of-permissions-that-can-be-requested)
   * [Privileges](#-privileges)
   * [Access Control](#-access-control)
@@ -110,6 +111,12 @@ The remainder of this articles digs into the details on how to properly utilize 
   * [Deployment Vs. Custom SCC](#-deployment-vs.-custom-scc)
 * [SCC admission process](#-scc-admission-process)
 * [Summary](#-summary)
+
+## OpenShift projects
+
+Any discussion of SCCs needs to be in the context of an OpenShift project namespace, which plays a major role in how SCCs are defined, managed, and utilized.
+
+OpenShift projects are the mechanism to scope resources in a cluster and are used by administrators to limit and isolate resources. These resources include users, deployments, and SCCs.
 
 ## Types of permissions that can be requested
 
@@ -181,18 +188,21 @@ Capabilities are requested in the deployment manifest using:
 
 ## Pre-defined SCCs
 
-Each Openshift cluster contains 8 pre-defined SCCs, each specifying a set of allowed permissions:
+Each Openshift cluster contains 8 pre-defined SCCs, each specifying a set of allowed permissions.
 
-* **restricted** -  denies access to all host features and requires pods to be run with a user ID (UID), and SELinux context that are allocated to the namespace.
-* **anyuid** - same as restricted, but allows users to run with any UID and group ID (GID).
-* **hostaccess** - allows access to all host namespaces but still requires pods to be run with a UID and SELinux context that are allocated to the namespace.
-* **hostmount-anyuid** - provides all the features of the restricted SCC but allows host mounts and any UID by a pod.  This is primarily used by the persistent volume recycler.
-* **hostnetwork** - allows using host networking and host ports but still requires pods to be run with a UID and SELinux context that are allocated to the namespace.
-* **node-exporter** -  is only used for the Prometheus node exporter.
-* **nonroot** - provides all features of the restricted SCC but allows users to run with any non-root UID.
-* **privileged** - allows access to all privileged and host features and the ability to run as any user, any group, any fsGroup, and with any SELinux context.
-
-If not specified, the **restricted** SCC will be used.
+|   |   |   |
+| - | - | - |
+| SCC | Description | Comments |
+| **restricted** | Denies access to all host features and requires pods to be run with a user ID (UID), and SELinux context that are allocated to the OpenShift project. | This is the most secure SCC and is always used by default. Will work for most typical stateless workloads. |
+| **anyuid** | Same as restricted, but allows users to run with any UID and group ID (GID). | This is very dangerous as it allows running as root user, both inside and outside the container. If used, SELinux controls can play an important role here adding a layer of protection. It's also a good idea to use **seccomp** to filter non desired system calls. |
+| **hostmount-anyuid** | Provides all the features of the restricted SCC but allows host mounts and any UID by a pod.  This is primarily used by the "persistent volume recycler", a trusted workload that is an essential infrastructure piece to the cluster. | Same warnings as using **anyuid**, but goes further by allowing the mounting of host volumes. |
+| **hostaccess** | Allows access to all host project namespaces but still requires pods to be run with a UID and SELinux context that are allocated to the project. | Access to all host namespaces is dangerous, even though it does restrict UID and SELinux. This should only be used for necessary trusted workloads. |
+| **hostnetwork** | Allows using host networking and host ports but still requires pods to be run with a UID and SELinux context that are allocated to the project. | This allows the pod to "see and use" the host network stack directly. Requiring the pod run with a non-zero UID and pre-allocated SELinux context will add some security. |
+| **node-exporter** | Only used for the Prometheus node exporter (Prometheus is a popular Kubenetes monitoring tool). | This SCC was designed specifically for Prometheus to retrieve metrics from the cluster. It allows access to the host network, host PIDS, and host volumes, but not host IPC. Also allows **anyuid**. This should **not** be used. |
+| **nonroot** | Provides all features of the **restricted** SCC but allows users to run with any non-root UID. | Suitable for applications that need predictable non root UIDs, but can function with all the other limitations set by the **restricted** SCC. |
+| **privileged** | Allows access to all privileged and host features, and the ability to run as any user, group, or fsGroup, and with any SELinux context. This is the most relaxed SCC policy. | This SCC allows a pod to control everything in the host and worker nodes, as well as other containers. Only trusted workloads should use this. There is a case to be made that this should never be used in production, as it allows the pod to completely control the host. |
+|   |   |   |
+<br>
 
 ## Managing SCCs
 
