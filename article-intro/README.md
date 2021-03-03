@@ -31,6 +31,8 @@ And how do you do that? Since OpenShift won't allow you to do either of these "p
 
 SCCs define what actions the pod is allowed to perform. In the same way that it can prevent a pod from performing any "privileged" actions, it can also agree to allow the pod certain permissions so that it can run successfully.
 
+>**NOTE**: SCCs are implemented using SELinux and AppArmor, both of which are standard kernel security modules included on all Red Hat Linux distributions. You should verify that your OpenShift cluster is built on a compliant Linux distribution.
+
 ## How a pod requests additional permissions
 
 In order to perform privileged actions, a pod must request "permission" via the deployment manifest - specifically using the **security context** section of the manifest. The manifest is then linked to an SCC, which decides if the requested permissions can be granted.
@@ -97,6 +99,7 @@ The remainder of this articles digs into the details on how to properly utilize 
 * [Pre-defined SCCs](#-pre-defined-sccs)
 * [Managing SCCs](#-managing-sccs)
 * [Creating custom SCCs](#creating-custom-sccs)
+  * [SELinux](#selinux)
   * [Seccomp](#Seccomp)
 * [Important resources used by SCCs](#-important-resources-used-by-sccs)
   * [Project namespace](#-project-namespace)
@@ -156,6 +159,14 @@ In the deployment manifest, these values can either be requested at the pod leve
 * **securityContext.runAsGroup** - request to run under a specific group ID.
 * **securityContext.fsGroup** - request to run under a specific group ID for accessing storage volumes.
 * **securityContext.seLinuxOptions** - request to run using a specific SELinux context set of labels.
+
+>**NOTE**: SELinux (Security-Enhanced Linux) is a Linux kernel module that provides additional access control security, and provides the following benefits:
+>
+>* All processes and files are labeled. SELinux policy rules define how processes interact with files, as well as how processes interact with each other. Access is only allowed if an SELinux policy rule exists that specifically allows it.
+>* Fine-grained access control. Stepping beyond traditional UNIX permissions that are controlled at user discretion and based on Linux user and group IDs, SELinux access decisions are based on all available information, such as an SELinux user, role, type, and, optionally, a security level.
+>* SELinux policy is administratively-defined and enforced system-wide.
+>* Improved mitigation for privilege escalation attacks. Processes run in namespaces, and are therefore separated from each other. SELinux policy rules define how processes access files and other processes.
+>
 
 ### Capabilities
 
@@ -349,6 +360,15 @@ Settings:
     Ranges:                     5000-6000
 ```
 
+A quick note on some of the permissions annotated in the SCC:
+
+### SELinux
+
+When using SELinuxContext in SCC's, note that:
+
+1. Using **MustRunAs** requires **seLinuxContext.seLinuxOptions** to be set, either in the SCC or at the project level. These values are then validated against the **seLinuxOptions** requested in the deployment manifest.
+1. Using **RunAsAny** means no default values are provided. Allows any **seLinuxOptions** to be specified in the deployment manifest.
+
 ### Seccomp
 
 Seccomp is a Linux kernel secuirty feature. When enabled this prevents a majority of system calls from being made by the container, eliminating most common vaulnerabities. Seccomp is maintained by a whitelist profile that can be added to for custom use and is unique to each base image profile.
@@ -397,7 +417,13 @@ Annotations:    openshift.io/description=
 
 Take note of the `openshift.io/sa.scc` annotation values. These will be used as default values when processing SCCs later in this article.
 
-The annotations define default values for (in order): SELinux options, group IDs, and user IDs. These values are only used if the corresponding SCC access control setting is NOT **RunAsAny**, AND when not specified in the SCC or deployment manifest. More on this later.
+The annotations define default values for (in order): 
+
+* SELinux options (MCS stands for multi-category security)
+* group IDs
+* user IDs
+
+These values are only used if the corresponding SCC access control setting is NOT **RunAsAny**, AND when not specified in the SCC or deployment manifest.
 
 ### RBAC Roles
 
@@ -651,37 +677,40 @@ Now let's try it against our **custom** SCC.
 
 ![pod-vs-custom-text](images/pod-vs-custom-text.png)
 
-## SCC Admission Process
+## SCC admission process
 
-As described earlier, OpenShift compares the permissions requested by the pod against what the associated SCC allows.
+The SCC admission process is used to by OpenShift to compare the permissions requested by the pod against what the associated SCC allows.
 
-But what happens when multiple SCCs are available? In this case, OpenShift will prioritize them.
+But what happens when multiple SCCs are available? This can occur, for example, when the **deployment manifest** links to a **service account** that is bound to multiple **RBAC roles**, each pointing to a different **SCC**.
 
-SCCs have a priority field that affects the ordering when a pod request is validated. A higher priority SCC is moved to the front of the set when sorting. When the complete set of available SCCs is determined, they are ordered by:
+In this case, OpenShift must prioritize the SCCs.
 
-* Highest priority first, nil is considered a 0 priority
-* If priorities are equal, the SCCs will be sorted from most restrictive to least restrictive
-* If both priorities and restrictions are equal the SCCs will be sorted by name
+SCCs have a priority field that affects the ordering when a pod request is validated. A higher priority SCC is moved to the front of the set when sorting. 
 
-Here are two Examples:
-First, we will create an scc called ***scc-priority-sample*** with **RunAsAny** and increate the priority to 11 (note **anyuid** has a priority 10).  When we then create a pod, I am using the example pod. Checking the yaml of the pod shows ***openshift.io/scc: scc-priority-sample***, with **RunAsAny** applied from that SCC.
-
-SCC:
+Here we show the YAML for an SCC that sets its priority to 11:
 
 ```yaml
 kind: SecurityContextConstraints
 apiVersion: security.openshift.io/v1
 metadata:
   name: scc-priority-sample
-allowPrivilegedContainer: true
+allowPrivilegedContainer: false
 runAsUser:
-  type: RunAsAny
+  type: MustRunAsRange 
+  uidRangeMin: 1000
+  uidRangeMax: 2000
 seLinuxContext:
   type: RunAsAny
 fsGroup:
-  type: RunAsAny
+  type: MustRunAs 
+  ranges:
+  - min: 5000
+    max: 6000
 supplementalGroups:
-  type: RunAsAny
+  type: MustRunAs 
+  ranges:
+  - min: 5000
+    max: 6000
 users:
 - my-admin-user
 groups:
@@ -689,37 +718,16 @@ groups:
 priority: 11
 ```
 
-Pod:
+When the complete set of available SCCs is determined, they are ordered by:
 
-```yaml
-kind: Pod
-apiVersion: v1
-metadata:
-  annotations:
-  ...
-    openshift.io/scc: scc-priority
-  selfLink: /api/v1/namespaces/scc-sample/pods/hello-world
-  ...
-  name: hello-world
-```
+* Highest priority first - nil is considered a 0 priority (lowest).
+* If priorities are equal, the SCCs will be sorted from most restrictive to least restrictive.
+* If both priorities and restrictions are equal, the SCCs will be sorted by name.
 
-If we attempt the same example but set the priority of ***scc-priority-sample*** to 10 such that is matches the **anyuid** then the ***addmission controller*** will choose **anyuid** and ignore our ***scc-priority-sample*** as **anyuid** will be more restrictive then our sample.
+It should also be noted that the admission process:
 
-Pod:
-
-```yaml
-kind: Pod
-apiVersion: v1
-metadata:
-  annotations:
-    ...
-    openshift.io/scc: anyuid
-  selfLink: /api/v1/namespaces/scc-sample/pods/scc-sample-pod
-  resourceVersion: '2149158'
-  name: scc-sample-pod
-```
-
-Note that in these two examples we are allowing the SCCs to be applied through out the cluster. SCCs on local or cluster access will not alter the priority or restriction.  As well as SCCs are not merged, one is accepted and the rest are ignored.
+* Does not give extra weight to cluster-wide SCCs over project-based SCCs.
+* Does not merge SCCs - one is accepted and the rest are ignored.
 
 ## Summary
 
