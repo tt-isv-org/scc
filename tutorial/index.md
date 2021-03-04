@@ -44,8 +44,8 @@ The "big picture" concepts from the article are summarized with the following fl
     * See how a deployment fails when requesting permissions that have not been assigned
 1. [Create and assign a security context constraint](#create-and-assign-a-security-context-constraint)
     * Create an SCC to allow your deployment's security contexts
-    * Create a new service account for your deployment
-    * Use role-based access control (RBAC) to assign the SCC to the role
+    * Create a cluster role that can use the SCC
+    * Assign the role to a service account
 1. [Create the deployment again with the security contexts](#create-the-deployment-again-with-the-security-contexts)
     * Now the deployment can be validated with an SCC
     * Examine the resulting security contexts and selected SCC
@@ -331,16 +331,7 @@ This YAML will deploy the same application, but this time we are requesting some
 
 ## Create and assign a security context constraint
 
-> TODO: *** converting to RBAC ***
-  * Create an SCC to allow your deployment's security contexts
-  * Create a new service account for your deployment
-  * Use role-based access control (RBAC) to assign the SCC to the role
-
 You will use security context constraints (SCCs) along with role based access controls (RBAC) to provide your workloads with the privileges they need to perform their work.
-
-> TODO: *** converting to RBAC ***
-
-### Create an SCC to allow your deployment's security contexts
 
 1. Save this YAML to a file named scc-tutorial-scc.yaml
 
@@ -368,27 +359,28 @@ You will use security context constraints (SCCs) along with role based access co
         max: 6000
     ```
 
-
 1. Run the following `oc create` command to create the SecurityContextConstraint.
 
     ```bash
     oc create -f scc-tutorial-scc.yaml
     ```
 
-1. Use our custom SCC with a service account
+1. Create a cluster role that can use the SCC
 
-    **Instead of modifying the project's default service account**, we'll create a new one and add the SCC to it.  Notice the `-z` in the usage.
+    ```bash
+    oc create clusterrole scc-tutorial-cr --verb=use --resource=scc --resource-name=scc-tutorial-scc
+    ```
 
-    > Usage: oc adm policy add-scc-to-user SCC (USER | -z SERVICEACCOUNT) [USER ...] [flags]
+1. Assign the role to a service account
 
-    Run the following commands to create the service account and add our existing SCC to it.
+    Run the following command to create a service account and assign the cluster role to it.
+
+    >  Note: The `-z` indicates that the user is a service account.
 
     ```bash
     oc create sa scc-tutorial-sa
-    oc adm policy add-scc-to-user scc-tutorial-scc -z scc-tutorial-sa
+    oc adm policy add-role-to-user scc-tutorial-cr -z scc-tutorial-sa
     ```
-
-> TODO: *** converting to RBAC ***
 
 ## Create the deployment again with the security contexts
 
