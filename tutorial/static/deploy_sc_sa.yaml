@@ -1,15 +1,15 @@
     apiVersion: apps/v1
     kind: Deployment
     metadata:
-      name: deploy3
+      name: scc-tutorial-deploy-sc-sa
     spec:
       selector:
         matchLabels:
-          app: deploy3
+          app: scc-tutorial-sc-sa
       template:
         metadata:
           labels:
-            app: deploy3
+            app: scc-tutorial-sc-sa
         spec:
           containers:
           - image: ubi8/ubi-minimal
@@ -19,7 +19,7 @@
               runAsUser: 1234
               runAsGroup: 5678
             volumeMounts:
-            - mountPath: /var/opt/deploy3/data
+            - mountPath: /var/opt/app/data
               name: data
           serviceAccountName: scc-tutorial-sa
           securityContext:
