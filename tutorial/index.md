@@ -124,6 +124,7 @@ Our example deployment will use a Red Hat Universal Base Image.
           volumes:
           - emptyDir: {}
             name: data
+
     ```
 
 1. Run the following command to create the deployment.
@@ -185,7 +186,7 @@ You can use the OpenShift Web Console or use `oc` commands in your terminal to s
         * Select `Deployments`
         * `Status` should say `1 of 1 pods`
 
-        ![deploy1_status.png](images/deploy1_status.png)
+        ![deploy_default_status.png](images/deploy_default_status.png)
 
     * Check the details of your pod:
 
@@ -193,11 +194,13 @@ You can use the OpenShift Web Console or use `oc` commands in your terminal to s
         * Click on the pod name `scc-tutorial-deploy-default-<generated-suffix>`
         * Select the `YAML` tab
 
+        ![deploy_default_yaml.png](images/deploy_default_yaml.png)
+
     * Look for the selected SCC:
         * Shown in `annotations`
         * Our default deployment got the `restricted` SCC
 
-        ![deploy1_scc.png](images/deploy1_scc.png)
+        ![deploy_default_scc.png](images/deploy_default_scc.png)
 
     * Scroll down to see the pod spec:
 
@@ -205,60 +208,58 @@ You can use the OpenShift Web Console or use `oc` commands in your terminal to s
         * `SecurityContext` for the pod was given `seLinuxOptions` and an `fsGroup` setting.
         * `SecurityContext` for the container was given some specific `capabilities` to `drop` and a `runAsUser`.
 
-        ![deploy1_spec.png](images/deploy1_spec.png)
+        ![deploy_default_spec.png](images/deploy_default_spec.png)
 
 ### Test your container runtime permissions
 
-1. Using `oc` commands:
+1. Use an interactive shell with `oc` or in the web console
 
-    * Get the pod name:
+    * Using `oc` commands
+
+      * Get the pod name:
 
         ```bash
         oc get pod -l app=scc-tutorial-default 
         ```
 
-    * Remote shell into the pod's container:
+      * Remote shell into the pod's container:
 
         ```bash
         oc rsh <pod-name>
         ```
 
-    * Try the following commands:
+    * Using the OpenShift Web Console
 
-        ```txt
-        whoami
-        id
-        exit
-        ```
+      * Select the `Terminal` tab on the pod details page
 
-    * Example commands with output:
+      ![deploy_default_terminal.png](images/deploy_default_terminal.png)
 
-        ```bash
-        sh-4.4$ whoami
-        1000620000
-        sh-4.4$ id
-        uid=1000620000(1000620000) gid=0(root) groups=0(root),1000620000
-        sh-4.4$ exit
-        exit
-        ```
+1. Try the following commands:
 
-1. Using the OpenShift Web Console
-
-    * From the pod details page
-
-        * Select the `Terminal` tab
-        * Run the `whoami` and `id` commands
-        * Select `Deployments`
-        * `Status` should say `1 of 1 pods`
-
-        ![deploy1_terminal.png](images/deploy1_terminal.png)
+    | Command | Description |
+    | -       | -           |
+    | `whoami` | Show your user ID (not root!) |
+    | `id`     | Show your group memberships   |
+    | `echo hello > fail.txt` | Test writing in the root directory |
+    | `echo hello > /tmp/temp.txt` | Write to /tmp |
+    | `echo hello > /var/opt/app/data/volume.txt` | Write to the volume |
+    | `ls -l /tmp/temp.txt` | Show the user/group ownership in /tmp |
+    | `ls -l /var/opt/app/data/volume.txt` | Show the user/group ownership on the volume |
+    | `exit` | Exit `oc rsh` shell |
+    |  | |
 
 1. Consider the results
 
-    * We did not specify any user ID or group ID in our deployment manifest.
-    * The user ID (uid) is the one that we saw assigned in the container `securityContext.runAsUser`.
-    * This uid has been assigned to the root group (ID 0) and also an additional group which has a group ID that is the same as the uid. This is the `fsGroup` that we saw assigned in the pod `securityContext`.
-    * This `fsGroup` is set as the owner of the mounted volume.
+    ![deploy_default_results.png](images/deploy_default_results.png)
+
+    * We did not specify any user ID (uid) or group ID (gid) in our deployment manifest.
+    * With the restricted SCC, we get the user and group IDs from the project defaults.
+    * The uid is the one that we saw assigned in the container `securityContext.runAsUser`.
+    * This uid has been assigned to the root group (ID 0) as its default gid.
+    * The user is also a member of the file system group. In this case, the file system group is the same as the uid. We saw this assigned in the pod `securityContext.fsGroup`.
+    * In `/tmp` the file we created is owned by uid/gid. The gid is root.
+    * On the volume, the file we created is owned by uid/fsGroup. In this case, fsGroup is our uid.
+    * We avoided running as root, but we had little control over our uid/gid.
 
 ## Attempt a deployment with security contexts
 
@@ -357,9 +358,11 @@ We've added security contexts, for the pod and the container, to request the fol
 
     We did not fail to "create the deployment". You can use `oc get deployment` or use the OpenShift Web Console to look for it. A deployment named `scc-tutorial-deploy-sc` was created. A replica set named `scc-tutorial-deploy-sc-<generated-suffix>` was also created. But both show 0-of-1 pods were created, and the replica set has that event that explains the problem.
 
-    These errors are expected because the deployment asked for specific permissions, and the restricted SCC will not allow these permissions. So, instead of deploying an application that will eventually run into data access errors, we made it fail earlier with reasons. Failing early is definitely a good thing. The other thing we accomplished by clearly indicating the special permissions needed by this application, is that we created a way for the developer, the deployer, and the security administrator to better communicate the special security requirements of this deployment.
+    These errors are expected because the deployment asked for specific permissions, and the default service account cannot use any SCC that will allow these permissions. So, instead of deploying an application that will eventually run into data access errors, we made it fail earlier with reasons. Failing early is definitely a good thing. The other thing we accomplished, by clearly indicating the special permissions needed by this application, is that we created a way for the developer, the deployer, and the security administrator to better communicate the special security requirements of this deployment.
 
 ## Create and assign a security context constraint
+
+*You must be a cluster admin for this step.*
 
 You will use security context constraints (SCCs) along with role based access controls (RBAC) to provide your workloads with the privileges they need to perform their work.
 
@@ -583,6 +586,7 @@ Use the OpenShift Web Console or use `oc` commands in your terminal to see the r
         id
         ls -l /var/opt
         echo hello > hello.txt
+        ls -ld /var/opt/app/data
         echo hello > /var/opt/app/data/hello.txt
         ls -l /var/opt/app/data/hello.txt
         cat   /var/opt/app/data/hello.txt
