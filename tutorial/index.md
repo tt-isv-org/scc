@@ -41,7 +41,7 @@ Our example use case is focused on demonstrating and controlling a container's r
 
 One common use case is any container that expects to run as a specific user. In this tutorial, you will learn that you can specify the user you need to run-as and the cluster administrator can create an SCC to allow that user (or range of users). By doing this you avoid needing the "anyuid" SCC, which would also allow running as root.
 
-The second common use case is a container that needs to access shared storage. A best practice is to add the group ID of the shared storage to the supplemental groups for the pod. Each container will become a member of these groups and will have access to the storage. This is generally easier to manage than permissions based on user IDs. A file system group ID (fsGroup) is a similar concept. The files system group ID is used when mounting block storage and is also added to the containers' supplemental groups.
+The second common use case is a container that needs to access shared storage. A best practice is to add the group ID of the shared storage to the supplemental groups for the pod. Each container will become a member of these groups and will have access to the storage. This is generally easier to manage than permissions based on user IDs. A file system group ID (fsGroup) is a similar concept. The file system group ID is used when mounting block storage and is also added to the containers' supplemental groups.
 
 After you've completed the tutorial, you should be ready to tackle either of the above use cases. You will also be ready to start exploring the many other privileges, capabilities, and settings that you can control with security contexts and security context constraints.
 
@@ -58,7 +58,7 @@ After you've completed the tutorial, you should be ready to tackle either of the
 1. [Create a default deployment](#create-a-default-deployment)
     * Deploy a workload using a Universal Base Image
     * Examine the default security contexts and SCC
-    * Test your containers runtime permissions
+    * Test your container's runtime permissions
 1. [Attempt a deployment with security contexts](#attempt-a-deployment-with-security-contexts)
     * Request special permissions for your deployment
     * See how a deployment fails when requesting permissions that have not been assigned
@@ -260,10 +260,11 @@ You can use the OpenShift Web Console or use `oc` commands in your terminal to s
     * In `/tmp` the file we created is owned by uid/gid. The gid is root.
     * On the volume, the file we created is owned by uid/fsGroup. In this case, fsGroup is our uid.
     * We avoided running as root, but we had little control over our uid/gid.
+    * If our volume was shared storage, containers with different uids would not be able to share data.
 
 ## Attempt a deployment with security contexts
 
-Let's say we are deploying an application where we need to control the user ID and group ID used for data access. It is a common practice to use group IDs for data access.
+Let's say we are deploying an application where we need a specific user ID, and we also want to use a shared group ID for data access. This one example covers the use cases mentioned earlier.
 
 The first thing we need to do is use security contexts in our deployment manifest to specify the expected user ID and group IDs for our pod and container.
 
@@ -478,7 +479,6 @@ For your 3rd try, we changed the `serviceAccountName` to use your new service ac
           volumes:
           - emptyDir: {}
             name: data
-
     ```
 
 1. Run the following command to create the deployment.
@@ -540,7 +540,7 @@ Use the OpenShift Web Console or use `oc` commands in your terminal to see the r
         * Find `scc-tutorial-deploy-sc-sa`
         * `Status` should say `1 of 1 pods`
 
-        ![deploy3_status.png](images/deploy3_status.png)
+        ![deploy_sc_sa_status.png](images/deploy_sc_sa_status.png)
 
     * Check the details of your pod:
 
@@ -552,7 +552,7 @@ Use the OpenShift Web Console or use `oc` commands in your terminal to see the r
         * Shown in `annotations`
         * Our default deployment got our new `scc-tutorial-scc` SCC
 
-        ![deploy3_scc.png](images/deploy3_scc.png)
+        ![deploy_sc_sa_scc.png](images/deploy_sc_sa_scc.png)
 
     * Scroll down to see the pod spec:
 
@@ -561,90 +561,55 @@ Use the OpenShift Web Console or use `oc` commands in your terminal to see the r
         * The volume was mounted at `/var/opt/app/data`
         * `ServiceAccountName` is `scc-tutorial-sa` (the service account we just created and assigned our one SSC)
 
-        ![deploy3_spec.png](images/deploy3_spec.png)
+        ![deploy_sc_sa_spec.png](images/deploy_sc_sa_spec.png)
 
 ### Test your container runtime permissions
 
-1. Using `oc` commands:
+1. Use an interactive shell with `oc` or in the web console
 
-    * Get the pod name:
+    * Using `oc` commands
+
+      * Get the pod name:
 
         ```bash
         oc get pod -l app=scc-tutorial-sc-sa
         ```
 
-    * Remote shell into the pod's container:
+      * Remote shell into the pod's container:
 
         ```bash
         oc rsh <pod-name>
         ```
 
-    * Try the following commands:
+    * Using the OpenShift Web Console
 
-        ```txt
-        whoami
-        id
-        ls -l /var/opt
-        echo hello > hello.txt
-        ls -ld /var/opt/app/data
-        echo hello > /var/opt/app/data/hello.txt
-        ls -l /var/opt/app/data/hello.txt
-        cat   /var/opt/app/data/hello.txt
-        chown 1:1   /var/opt/app/data/hello.txt
-        chown :5777   /var/opt/app/data/hello.txt
-        exit
-        ```
+      * Select the `Terminal` tab on the pod details page
 
-    * Example commands with output:
+1. Try the following commands:
 
-        ```bash
-        sh-4.4$ whoami
-        1234
-        sh-4.4$ id
-        uid=1234(1234) gid=5678 groups=5678,5555,5777,5888
-        sh-4.4$ ls -l /var/opt
-        total 8
-        drwxr-xr-x. 3 root root 4096 Mar  2 17:33 app
-        sh-4.4$ echo hello > hello.txt
-        sh: hello.txt: Permission denied
-        sh-4.4$ echo hello > /var/opt/app/data/hello.txt
-        sh-4.4$ ls -l /var/opt/app/data/hello.txt
-        -rw-rw-rw-. 1 1234 5555 6 Mar  2 17:58 /var/opt/app/data/hello.txt
-        sh-4.4$ cat   /var/opt/app/data/hello.txt
-        hello
-        sh-4.4$ chown 1:1   /var/opt/app/data/hello.txt
-        chown: changing ownership of '/var/opt/app/data/hello.txt': Operation not permitted
-        sh-4.4$ chown :5777   /var/opt/app/data/hello.txt
-        sh-4.4$ ls -l         /var/opt/app/data/hello.txt
-        -rw-rw-rw-. 1 1234 5777 6 Mar  2 17:58 /var/opt/app/data/hello.txt
-        sh-4.4$ exit
-        exit
-        ```
-
-1. Using the OpenShift Web Console
-
-    * From the pod details page
-
-        * Select the `Terminal` tab
-        * Run the `whoami` and `id` commands
-        * Select `Deployments`
-        * `Status` should say `1 of 1 pods`
-
-        ![deploy3_terminal.png](images/deploy3_terminal.png)
+    | Command | Description |
+    | -       | -           |
+    | `whoami` | Show your user ID (not root!) |
+    | `id`     | Show your group memberships   |
+    | `echo hello > fail.txt` | Test writing in the root directory |
+    | `echo hello > /tmp/temp.txt` | Write to /tmp |
+    | `echo hello > /var/opt/app/data/volume.txt` | Write to the volume |
+    | `ls -l /tmp/temp.txt` | Show the user/group ownership in /tmp |
+    | `ls -l /var/opt/app/data/volume.txt` | Show the user/group ownership on the volume |
+    | `exit` | Exit `oc rsh` shell |
+    |  | |
 
 1. Consider the results
 
-    * You are **not** running as root or using the project's default 10 digit user ID range. You could've (should've?) used the project default, but was nice to see we can control this. This just might be the simplest example to prove you can use an SCC.
+    ![deploy_sc_sa_results.png](images/deploy_sc_sa_results.png)
 
-    * You are running with the gid from `RunAsGroup` and have been added to the `supplementalGroups` and `fsGroup` as well.
-
-    * You cannot write in the root directory. You are not root or a privileged user!
-
-    * The volume was mounted at the path in your spec in a directory owned by `root:5555`. This group ownership came from the `fsGroup` setting.
-
-    * Since you were automatically added to the `fsGroup`, you can write a file to the volume.
-
-    * You tested that you cannot change the file ownership to anything the way a priveleged user could, but for a file owned by you, you can change the group to one of the groups you are assigned to.
+    * We are using the user ID (uid) or group ID (gid) from our deployment manifest.
+    * The user is also a member of the file system group. We specified this ID in the pod `securityContext.fsGroup`.
+    * In `/tmp` the file we created is owned by 1234/5678 (our specified uid/gid).
+    * On the volume, the file we created is owned by 1234/5555 (our specified uid/fsGroup).
+    * We avoided running as root, and using the root group.
+    * If our volume was shared storage, containers with different uids **would** be able to share data with members of the same group.
+    * This example only used the fsGroup, but you can see that the other supplemental groups that we specified were also created and assigned to the user.
 
 ## Clean up
 
@@ -664,7 +629,7 @@ oc delete scc/scc-tutorial-scc
 
 ### What did we learn?
 
-* We can check the pod YAML, to see what SCC was used.
+1. We can check the pod YAML, to see what SCC was used.
 
 1. We used a security context to indicate that our deployment is requesting permission to:
 
@@ -673,8 +638,18 @@ oc delete scc/scc-tutorial-scc
     * Use fsGroup 5555 to allow read/write on a volume
     * Use supplemental groups 5777 and 5888
 
-1. We allowed security context constraint validation to fail using the default service account and restricted SCC.
+1. We allowed security context constraint validation to fail using the default service account and restricted SCC (because we did not have permission to do all those things yet), and we learned how to find the error message.
 
 1. We created an SCC with the permissions we needed.
 
 1. We created a service account and assigned the SCC to it
+
+1. We were successful in creating a pod/container with the security context settings that we wanted.
+
+### Next steps?
+
+1. Try a similar exercise using an image of your own application or a 3rd-party application that you use.
+
+1. Experiment with other security context and SCC settings.
+
+1. Learn to give your workloads the least permissions necessary to do their work.
