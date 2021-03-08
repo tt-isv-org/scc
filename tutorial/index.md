@@ -4,7 +4,17 @@
 
 This hands-on tutorial is intended for developers and cluster administrators who are interested in learning how to deploy workloads on a Red Hat OpenShift cluster in a secure way.
 
-Using security context contraints (SCCs), we'll demonstrate how a workload can be given the least amount of permissions necessary to perform its work. This best practice helps to protect your cluster from both intentional and accidental harm while providing a way to request and grant additional permissions when necessary.
+Using security context contraints (SCCs), you'll learn how to give a workload the least amount of permissions necessary to perform its work. This best practice helps to protect your cluster from both intentional and accidental harm while providing a way to request and grant additional permissions when necessary.
+
+In this tutorial, you will create a simple deployment. Deployments rollout replica sets which bring up pods as requested in a spec. This tutorial starts with a simple pod that mounts a temporary volume and runs a single container. We can use a remote shell to run commands on the container to examine its runtime environment and permissions.
+
+You will learn how to:
+
+* Check the pod YAML, to see what SCC and security context it was assigned
+* Test access permissions using a default service account and default security context
+* Find an error event that shows a security context constraint validation error
+* Create an SCC and assign it to a service account
+* Use a security context with an SCC to control file access on a volume
 
 ## Concepts
 
@@ -24,6 +34,16 @@ The "big picture" concepts from the article are summarized with the following fl
 1. OpenShift processes the manifest and attempts to deploy the pod. The deployment process will compare the permissions requested by the deployment manifest against the permissions allowed by the associated SCCs.
 1. If the associated SCC cannot provide all of the permissions the deployment manifest requests, the deployment will fail.
 1. Otherwise, the deployment will create the pod and run the application.
+
+## Use cases
+
+Our example use case is focused on demonstrating and controlling a container's runtime user ID and group ID and the pod's file system group ID and supplemental groups. By running a Universal Base Image and mounting an EmptyDir volume, you won't see a full-stack application, but it is easy to run some commands on the container to see what the environment looks like and test the privileges and access controls.
+
+One common use case is any container that expects to run as a specific user. In this tutorial, you will learn that you can specify the user you need to run-as and the cluster administrator can create an SCC to allow that user (or range of users). By doing this you avoid needing the "anyuid" SCC, which would also allow running as root.
+
+The second common use case is a container that needs to access shared storage. A best practice is to add the group ID of the shared storage to the supplemental groups for the pod. Each container will become a member of these groups and will have access to the storage. This is generally easier to manage than permissions based on user IDs. A file system group ID (fsGroup) is a similar concept. The files system group ID is used when mounting block storage and is also added to the containers' supplemental groups.
+
+After you've completed the tutorial, you should be ready to tackle either of the above use cases. You will also be ready to start exploring the many other privileges, capabilities, and settings that you can control with security contexts and security context constraints.
 
 ## Prerequisites
 
@@ -49,7 +69,15 @@ The "big picture" concepts from the article are summarized with the following fl
 1. [Create a deployment using the service account that can use the SCC](#create-a-deployment-using-the-service-account-that-can-use-the-SCC)
     * Now the deployment can be validated with an SCC
     * Examine the resulting security contexts and selected SCC
-    * Test your containers new runtime permissions
+    * Test your container's new runtime permissions
+
+### Personas
+
+Steps 1, 2, and 4 are performed by a user with permission to create deployments (the Deployer). The Deployer is responsible for specifying security contexts to request the permissions required by the pod and container. The Deployer can also select the service account that will be used to validate the requested permissions.
+
+Step 3 is performed by a cluster admin. Creating and assigning SCCs can be done to restrict permissions, but it can also relax permissions and create vulnerabilities. Because of this, it is up to the cluster admin to determine which SCCs should be allowed in the cluster and when to assign them to project service accounts.
+
+Once privileges have been given to an SCC and the SCC has been granted to a project service account (e.g. via a role binding), any Deployer in the project can take advantage of those privileges.
 
 ## Create a default deployment
 
@@ -616,6 +644,8 @@ Use the OpenShift Web Console or use `oc` commands in your terminal to see the r
 
 ## Clean up
 
+You can delete the resource that you created during this tutorial with the following commands.
+
 ```bash
 oc delete deployment/scc-tutorial-deploy-default
 oc delete deployment/scc-tutorial-deploy-sc
@@ -625,21 +655,6 @@ oc delete role/scc-tutorial-testrole
 oc delete sa/scc-tutorial-sa
 oc delete scc/scc-tutorial-scc
 ```
-
-## Shared storage use cases
-
-* NFS example
-    * Each pod can write to and read from the other pod via the file system
-        * Shared storage
-        * PersistentVolumeClaim
-        * volumeMode: Filesystem
-        * 2 pods RWX (same project/namespace)
-
-* Block storage example
-    * Write to storage, kill pod, a new pod mounts and reads/writes to the same volume without data loss.
-        * 1 pod RWO
-        * PersistentVolumeClaim
-        * Retain
 
 ## Conclusion
 
