@@ -644,14 +644,14 @@ Use the OpenShift Web Console or use `oc` commands in your terminal to see the r
 
 ## Clean up
 
-You can delete the resource that you created during this tutorial with the following commands.
+You can delete the resources that you created during this tutorial with the following commands.
 
 ```bash
 oc delete deployment/scc-tutorial-deploy-default
 oc delete deployment/scc-tutorial-deploy-sc
 oc delete deployment/scc-tutorial-deploy-sc-sa
-oc delete rolebindings/scc-tutorial-role
-oc delete role/scc-tutorial-testrole
+oc delete rolebindings/use-scc-tutorial-scc
+oc delete role/use-scc-tutorial-scc
 oc delete sa/scc-tutorial-sa
 oc delete scc/scc-tutorial-scc
 ```
