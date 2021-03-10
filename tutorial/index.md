@@ -37,13 +37,21 @@ The "big picture" concepts from the article are summarized with the following fl
 
 ## Use cases
 
-Our example use case is focused on demonstrating and controlling a container's runtime user ID and group ID and the pod's file system group ID and supplemental groups. By running a Universal Base Image and mounting an EmptyDir volume, you won't see a full-stack application, but it is easy to run some commands on the container to see what the environment looks like and test the privileges and access controls.
+Our example use case is focused on demonstrating and learning. You will be controlling a container's runtime user ID and group ID and the pod's file system group ID and supplemental groups. By running a Universal Base Image and mounting an EmptyDir volume, you won't see a full-stack application, but it is easy to run some commands on the container to see what the environment looks like and test the privileges and access controls on the ephemeral mounted volume.
 
-One common use case is any container that expects to run as a specific user. In this tutorial, you will learn that you can specify the user you need to run-as and the cluster administrator can create an SCC to allow that user (or range of users). By doing this you avoid needing the "anyuid" SCC, which would also allow running as root.
+Beyond our goal of hands-on learning, here's how our example relates to real world workloads:
 
-The second common use case is a container that needs to access shared storage. A best practice is to add the group ID of the shared storage to the supplemental groups for the pod. Each container will become a member of these groups and will have access to the storage. This is generally easier to manage than permissions based on user IDs. A file system group ID (fsGroup) is a similar concept. The file system group ID is used when mounting block storage and is also added to the containers' supplemental groups.
+1. Accessing shared storage
 
-After you've completed the tutorial, you should be ready to tackle either of the above use cases. You will also be ready to start exploring the many other privileges, capabilities, and settings that you can control with security contexts and security context constraints.
+    * A very common use case is a container that needs to access shared storage. A best practice is to add the group ID of the shared storage to the supplemental groups for the pod. Each container will become a member of these groups and will have access to the storage. This is generally easier to manage than permissions based on user IDs. A file system group ID (fsGroup) is a similar concept. The file system group ID is used when mounting block storage and is also added to the containers' supplemental groups. Our example deployment demonstrates both fsGroup and supplmental groups (and a mounted ephemeral volume).
+
+1. Forcing a user ID and/or group ID
+
+   * Another common use case is any container that just won't work without a specific user or group. Although it would be nice to fix the container to work with the project-assigned UID/GID, if necessary you can specify a runAsUser and/or runAsGroup in the security context and then use SCCs to allow and validate. Our example does this. Changing the runAsUser also happens to be one of the easier experiments to try as you are learning.
+   
+1. Privileged containers and capabilities
+
+    * Lastly, there are many example of containers that need to run as root, or as a privileged user. This is something for a Deployer to request and for a cluster administrator to restrict (to protect against vulnerabilities or abuse). Although the tutorial avoids requesting these privileges, you will learn the tools to request and grant privileges. Fortunately, fine-grained capabilities can be requested instead of full privileges when you use security contexts and SCCs.
 
 ## Prerequisites
 
@@ -77,7 +85,7 @@ Steps 1, 2, and 4 are performed by a user with permission to create deployments 
 
 Step 3 is performed by a cluster admin. Creating and assigning SCCs can be done to restrict permissions, but it can also relax permissions and create vulnerabilities. Because of this, it is up to the cluster admin to determine which SCCs should be allowed in the cluster and when to assign them to project service accounts.
 
-Once privileges have been given to an SCC and the SCC has been granted to a project service account (e.g. via a role binding), any Deployer in the project can take advantage of those privileges.
+> WARNING: Once privileges have been given to an SCC and the SCC has been granted to a project service account (e.g. via a role binding), any Deployer in the project can take advantage of those privileges.
 
 ## Create a default deployment
 
