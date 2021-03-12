@@ -442,7 +442,7 @@ You will use security context constraints (SCCs) along with role based access co
       apiGroup: rbac.authorization.k8s.io
     ```
 
-1. Run the following command to create the cluster role and bind it to your service account.
+1. Run the following command to create the role and bind it to your service account.
 
     ```bash
     oc create -f rbac.yaml
