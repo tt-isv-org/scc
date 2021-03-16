@@ -8,11 +8,11 @@ This is part II of the learning series on OpenShift Security Context Contraints 
   * [Access control](#access-control)
   * [Capabilities](#capabilities)
 * [Pre-defined SCCs](#pre-defined-sccs)
-* [Managing SCCs](#managing-sccs)
+  * [Examining the restricted SCC](#examining-the-restricted-scc)
 * [Creating custom SCCs](#creating-custom-sccs)
   * [SELinux](#selinux)
   * [Seccomp](#Seccomp)
-* [How to connect deployments to SCCs](#how-to-connect-deployments-to-sccs)
+* [Making SCCs available](#making-sccs-available)
   * [Service accounts](#service-accounts)
   * [Assign SCCs to service accounts](#assign-sccs-to-service-accounts)
 * [Deployment manifest](#deployment-manifests)
@@ -121,19 +121,16 @@ Each Openshift cluster contains 8 pre-defined SCCs, each specifying a set of all
 |   |   |   |
 <br>
 
-## Managing SCCs
+>**IMPORTANT:** You should never modify or delete any of the pre-defined SCCs.
 
-Administrators can manage the SCCs on the OpenShift cluster via the OpenShift CLI.
+### Examining the restricted SCC
+
+SCCs can be viewed using the following OpenShift CLI commands:
 
 ```bash
-oc get scc
 oc get scc <scc name> -o yaml
 oc describe scc/<scc name>
-oc edit scc <scc name>
-oc delete scc <scc name>
 ```
-
->**IMPORTANT:** You should never modify or delete any of the pre-defined SCCs.
 
 Here is a snippet of what the **restricted** SCC YAML file looks like (note that comment lines have been added to the YAML for clarity):
 
@@ -175,8 +172,8 @@ Note how locked down this SCC is - it doesn't allow any special privileges or ca
 Regarding the access control section, the following types can be specified:
 
 * **MustRunAs** and **MustRunAsRange** enforces the range of ID values that can be requested by a container, and also assigns a default value if needed.
-* **RunAsAny** indicates that no range checking is performed and no default value is assigned, thus allowing any ID to be requested.
-* **MustRunAsNonRoot** indicates that any non-root (UID 0) ID value can be requested.
+* **RunAsAny** indicates that no range checking is performed, thus allowing any ID to be requested. Note that this allows UID 0 (root) to be specified, which is significantly less secure than a non-root UID.
+* **MustRunAsNonRoot** indicates that any non-root (UID 0) ID value can be requested. This is similar to **RunAsAny** but much more secure.
 
 ## Creating custom SCCs
 
@@ -287,9 +284,13 @@ Seccomp is a Linux kernel security feature. When enabled this prevents a majorit
 
 Here is an example of a RedHat linux image [RedHat Linux capabilites and Seccomp](https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux_atomic_host/7/html/container_security_guide/linux_capabilities_and_seccomp).
 
-## How to connect deployments to SCCs
+## Making SCCs available
 
-Once we have decided which SCC to use (pre-existing or custom), how do we link to it in our deployment?
+> **IMPORTANT** - This section includes the use of Role-based access control (RBAC) resources and assumes you have a fundamental knowledge about RBAC -- such as roles and bindings, and how administrators make them work together to manage user permissions and access. For reference, check out these pages in the Red Hat OpenShift documentation:
+>* [Using RBAC to define and apply permissions](https://docs.openshift.com/container-platform/4.6/authentication/using-rbac.html)
+>* [Understanding and creating service accounts](https://docs.openshift.com/container-platform/4.6/authentication/understanding-and-creating-service-accounts.html)
+
+Once we have decided which SCC to use (pre-existing or custom), how do we make it available to deployments?
 
 The key resource is the **service account**, which provides the link to an SCC.
 
@@ -321,7 +322,7 @@ Here is the command to assign our custom SCC to our service account:
 oc adm policy add-scc-to-user my-custom-scc -z my-custom-sa
 ```
 
-**NOTE**: The preferred approach would be to use an RBAC role for this association. You would create a role that would link to the SCC, and then create a role binding to link the service account with the role. See [Role-based access to security context constraints](https://docs.openshift.com/container-platform/4.7/authentication/managing-security-context-constraints.html#role-based-access-to-ssc_configuring-internal-oauth) for more details.
+**NOTE**: The preferred approach is to associate an SCC with a service account via an RBAC role: Create a role, associate the SCC with the role, and bind the service account to the role. See [Role-based access to security context constraints](https://docs.openshift.com/container-platform/4.7/authentication/managing-security-context-constraints.html#role-based-access-to-ssc_configuring-internal-oauth) for more details on how to accomplish this.
 
 ## Deployment manifests
 
