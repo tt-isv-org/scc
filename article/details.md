@@ -1,26 +1,16 @@
 # Red Hat OpenShift security practices using security context contraints - Part II
 
-This is part II of the learning series on OpenShift Security Context Contraints (SCC). This article digs into the details on how to properly utilize SCCs. The topics covered include:
+This article is Part II of the two-part series on Red Hat OpenShift Security Context Contraints (SCCs).
 
-* [OpenShift projects](#openshift-projects)
-* [Types of permissions that can be requested](#types-of-permissions-that-can-be-requested)
-  * [Privileges](#privileges)
-  * [Access control](#access-control)
-  * [Capabilities](#capabilities)
-* [Pre-defined SCCs](#pre-defined-sccs)
-  * [Examining the restricted SCC](#examining-the-restricted-scc)
-* [Creating custom SCCs](#creating-custom-sccs)
-  * [SELinux](#selinux)
-  * [Seccomp](#Seccomp)
-* [Making SCCs available](#making-sccs-available)
-  * [Service accounts](#service-accounts)
-  * [Assign SCCs to service accounts](#assign-sccs-to-service-accounts)
-* [Deployment manifest](#deployment-manifests)
-* [Putting it all together](#putting-it-all-together)
-  * [Deployment vs restricted SCC](#deployment-vs-restricted-scc)
-  * [Deployment vs custom SCC](#deployment-vs-custom-scc)
-* [SCC admission process](#scc-admission-process)
-* [Summary](#summary)
+[Part I](https://github.ibm.com/TT-ISV-org/scc/blob/main/article/intro.md) provided background information on what SCCs are, and how they play a key role in providing security on an OpenShift cluster.
+
+This article builds on those concepts and digs into the details on how to properly utilize SCCs. This includes:
+
+* Details on how SCCs allow permissions
+* What pre-defined SCCs are and when they should be used
+* How to create custom SCCs
+* Details on how deployment manifests request permissions
+* How to connect deployment manifests with SCCs
 
 ## OpenShift projects
 
