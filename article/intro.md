@@ -1,5 +1,9 @@
 # Red Hat OpenShift security practices using security context contraints - Part I
 
+This article is Part I of a two-part series on Red Hat OpenShift security context constraints (SCC). Here we will focus on why they are needed, and how they can play a key role in providing security on an OpenShift cluster. [Part II](https://github.ibm.com/TT-ISV-org/scc/blob/main/article/details.md) of this article series will dig into the details of how they are implemented and administered.
+
+## Introduction
+
 This article is intended for those interested in maintaining a secure **Red Hat OpenShift** cluster. This includes cluster administrators, who's first priority is to protect and control system resources, and deployers, who may require the use of those same resources.
 
 The specific type of security we will be discussing is controlling permissions for pods. By default, OpenShift blocks containers from accessing protected resources. This protects the cluster and its infrastructure from malicious code running in a container process and thereby makes the cluster more secure.
@@ -101,7 +105,7 @@ Here is an overview of how user and service accounts, roles, deployment manifies
 
 ## Continue learning
 
-To dig deeper into the details of how SCCs work, check out part II of this article [here](https://github.ibm.com/TT-ISV-org/scc/blob/main/article/intro.md).
+To dig deeper into the details of how SCCs work, check out [Part II](https://github.ibm.com/TT-ISV-org/scc/blob/main/article/details.md) of this article series.
 
 Or check out documentation from Red Hat on [Managing Securuty Context Constraints](https://docs.openshift.com/container-platform/4.7/authentication/managing-security-context-constraints.html).
 
