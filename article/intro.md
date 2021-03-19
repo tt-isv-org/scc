@@ -9,21 +9,21 @@ This article is part 1 of a two-part series on security context constraints (SCC
 An OpenShift cluster provides several features for securing the cluster and the applications running in the cluster, including container security, certificate management, vulnerability scanning, and authentication and authorization. Security context constraints address one aspect of security, namely enabling an application the ability to access protected resources such as shared file systems and [privileged ip ports](https://www.w3.org/Daemon/User/Installation/PrivilegedPorts.html). To prevent even a rogue or hacked application from gaining access to resources it shouldn't be able to access, the access is configured by the pod running the application container and is enforced by the cluster. The application can only access the resources that the pod requests and that the cluster approves.
 
 An application's access to protected resources is an agreement between three personas:
-- A **developer** who writes an application that accesses protected resources
-- A **deployer** who writes the deployment manifest that must request the access the application requires
-- An **administrator** who decides whether to grant the deployment the access it requests
+
+* A **developer** who writes an application that accesses protected resources
+* A **deployer** who writes the deployment manifest that must request the access the application requires
+* An **administrator** who decides whether to grant the deployment the access it requests
 
 This diagram illustrates the components and process that allow an application to access resources:
 
 ![top-level](images/top-level.png)
-(_Rich: Please modify this diagram to show: Add a box to the Deployment Manifest labeled "application container". Add a Developer icon with an arrow pointing to the application container box and number this #1._)
 
-1. A developer writes an application 
+1. A developer writes an application
 1. A deployer creates a **deployment manifest** to deploy the application with a pod spec that configures:
     * A **security context** (for the pod and/or for each container) that requests the access needed by the application
     * A **service account** to grant the requested access
 1. An administrator assigns a **security context constraint** to the service account that grants the requested access
-    * The SCC can be assigned directly to the SA or indirectly via an RBAC role or group
+    * The SCC can be assigned directly to the service account or indirectly via an RBAC role or group
 1. The SCC may be one of OpenShift's predefined SCCs or may be a custom SCC
 1. If the SCC grants the access, the pod deploys successfully
 
@@ -60,16 +60,15 @@ To better understand how SCCs are used to control access on a Red Hat OpenShift 
 This diagram illustrates the deployment process:
 
 ![flow](images/flow.png)
-(_Rich: Please modify this diagram to remove the icons for User Account and Create. Show an arrow from the Deployer to the OpenShift API that depicts the Deployer deploying the Deployment Manifest. Also, extend the OpenShift Administrator box to include the Service Account. Thanks._)
 
 1. The **developer** implements an application or service that requires access to protected resources, and delivers the application to the deployer.
 1. The **deployer** creates a deployment manifest for the application. The manifest specifies a security context and a service account.
-1. The **administrator** creates a role and assigns it a security context constraint.
+1. The **administrator** creates a role and assigns it an SCC.
 1. The **administrator** creates a service account and binds it to the role.
 1. The **deployer** applies the deployment manifest, thereby deploying the application.
-1. OpenShift processes the manifest and attempts to deploy the pod. The deployment process will compare the permissions requested by the deployment manifest against the permissions allowed by the associated SCC. Does the associated SCC provide all of the permissions the deployment manifest requests?
-1. NO: Some requested permissions are not granted, so the deployment fails.
-1. YES: All requested permissions are granted, so the deployment creates the pod and runs the application.
+1. OpenShift processes the deployment manifest and attempts to deploy the pod. The deployment process will determine which SCC to use based on the sevice account specified in the manifest. It then compares the permissions requested by the manifest against the permissions allowed by the SCC. Does the associated SCC provide all of the permissions the deployment manifest requests?
+1. **NO**: Some requested permissions are not granted, so the deployment fails.
+1. **YES**: All requested permissions are granted, so the deployment creates the pod and runs the application.
 
 If the pod is denied the requested permissions, the administrator will need to:
 
