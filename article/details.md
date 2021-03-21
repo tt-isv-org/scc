@@ -1,6 +1,6 @@
-# How security context constraints in Red Hat OpenShift work
+# Allow pods to access protected resources in Red Hat OpenShift using security context constraints
 
-This article is the second in a two-part series on Red Hat OpenShift Security Context Constraints (SCCs). "[Introduction to Red Hat OpenShift security practices using security context constraints](https://github.ibm.com/TT-ISV-org/scc/blob/main/article/intro.md)" provides background information on what SCCs are and how they play a key role in configuring security in an OpenShift cluster.
+This article is the second in a two-part series on Red Hat OpenShift Security Context Constraints (SCCs). "[Introduction to Red Hat OpenShift security context constraints](https://github.ibm.com/TT-ISV-org/scc/blob/main/article/intro.md)" provides background information on what SCCs are and how they play a key role in configuring security in an OpenShift cluster.
 
 This article builds on those concepts and digs into the details on how to properly utilize SCCs. This includes:
 * Details on how SCCs allow permissions
