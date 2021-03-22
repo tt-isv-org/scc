@@ -20,22 +20,28 @@ You will learn how to:
 
 ## Concepts
 
-It is recommended that you read the following article to learn the concepts before attempting this hands-on tutorial:
+Before attempting this hands-on tutorial, you may want to learn about the concepts for how security context constraints are used: "[Introduction to Red Hat OpenShift security context constraints](https://github.ibm.com/TT-ISV-org/scc/blob/main/article/intro.md)." That article explains these overall concepts:
 
-* [Red Hat OpenShift security practices using security context contraints](https://ibm.developer.com/TBD)
+An application's access to protected resources is an agreement between three personas:
 
-The "big picture" concepts from the article are summarized with the following flow diagram.
+* A **developer** who writes an application that accesses protected resources
+* A **deployer** who writes the deployment manifest that must request the access the application requires
+* An **administrator** who decides whether to grant the deployment the access it requests
 
-![flow.png](images/flow.png)
+This diagram illustrates the components and process that allow an application to access resources:
 
-1. The **Programmer** develops an application or service, and ...
-1. Delivers the application to the **Deployer**, who creates a deployment manifest for the application.
-1. The **cluster-admin** creates roles which are assigned a security context constraint.
-1. The **cluster-admin** creates an **OpenShift User Account** and assigns it a role that provides deployment permissions. Also created is an **OpenShift Service Account** that is assigned to a role associated with one or more SCCs.
-1. The **Deployer** logs into OpenShift using the new **OpenShift User Account**, and deploys the application using the deployment manifest. The manifest may contain a request for additional permissions, and may reference which **OpenShift Service Account** to use when deploying the pod.
-1. OpenShift processes the manifest and attempts to deploy the pod. The deployment process will compare the permissions requested by the deployment manifest against the permissions allowed by the associated SCCs.
-1. If the associated SCC cannot provide all of the permissions the deployment manifest requests, the deployment will fail.
-1. Otherwise, the deployment will create the pod and run the application.
+![top-level](images/top-level.png)
+
+1. A developer writes an application
+1. A deployer creates a **deployment manifest** to deploy the application with a pod spec that configures:
+    * A **security context** (for the pod and/or for each container) that requests the access needed by the application
+    * A **service account** to grant the requested access
+1. An administrator assigns a **security context constraint** to the service account that grants the requested access
+    * The SCC can be assigned directly to the service account or indirectly via an RBAC role or group
+1. The SCC may be one of OpenShift's predefined SCCs or may be a custom SCC
+1. If the SCC grants the access, the admission process allows the pod to deploy
+
+> **NOTE**: An OpenShift service account is a special type of user account that can be used programmatically without using a regular user’s credentials.
 
 ## Prerequisites
 
@@ -44,6 +50,8 @@ The "big picture" concepts from the article are summarized with the following fl
 * The OpenShift CLI (oc)
 * A bash or zsh terminal (or similar)
 * An OpenShift project to work in
+
+> **NOTE**: This tutorial demonstrates how SCCs can manage file access permissions and ownership settings using Linux features like user, group, file system group, and supplemental groups. For a refresher on these features, check out "[Learn Linux, 101: Manage file permissions and ownership](https://developer.ibm.com/tutorials/l-lpic1-104-5/)."
 
 ## Steps
 
@@ -65,11 +73,11 @@ The "big picture" concepts from the article are summarized with the following fl
 
 ### Personas
 
-Steps 1, 2, and 4 are performed by a user with permission to create deployments (the Deployer). The Deployer is responsible for specifying security contexts to request the permissions required by the pod and container. The Deployer can also select the service account that will be used to validate the requested permissions.
+Steps 1, 2, and 4 are performed by a user with permission to create deployments (the deployer). The deployer is responsible for specifying security contexts to request the permissions required by the pod and container. The deployer can also select the service account that will be used to validate the requested permissions.
 
 Step 3 is performed by a cluster admin. Creating and assigning SCCs can be done to restrict permissions, but it can also relax permissions and create vulnerabilities. Because of this, it is up to the cluster admin to determine which SCCs should be allowed in the cluster and when to assign them to project service accounts.
 
-> WARNING: Once privileges have been given to an SCC and the SCC has been granted to a project service account (e.g. via a role binding), any Deployer in the project can take advantage of those privileges.
+> **WARNING**: Once privileges have been given to an SCC and the SCC has been granted to a project service account (e.g. via a role binding), any deployer in the project can take advantage of those privileges.
 
 ## Step 1: Create a default deployment
 
@@ -138,7 +146,7 @@ By running a Red Hat Universal Base Image and mounting an EmptyDir volume, you w
 
 ### Examine the default security contexts and SCC
 
-You can get the full YAML description of the pod to see details. For this tutorial, the interesting part is the annotation that shows what SCC was used, the container securityContext, and the pod securityContext. Also worth noting, is that we used the `default` service account.
+You can get the full YAML description of the pod to see details. For this tutorial, the interesting part is the annotation that shows what SCC was used, the container securityContext, and the pod securityContext. Also worth noting, is that we explicitly specified the `default` service account in our manifest for completeness. We would normally leave that out to use the default service account (because `default` is the default).
 
 You can use the OpenShift Web Console or use the `oc` command line interface in your terminal to see the results.
 
@@ -322,8 +330,6 @@ We've added security contexts, for the pod and the container, to request the fol
 * Add supplemental group IDs 5777 and 5888
 * Use a file system group ID of 5555
 
-> Note: To demonstrate security contexts and SCCs, we will be using file access permissions and ownership. If you are not familiar enough with these concepts, read more about them [here](https://developer.ibm.com/tutorials/l-lpic1-104-5/).
-
 1. Download the deployment manifest YAML file from [here](static/deploy_sc.yaml) or copy/paste and save it to a file named deploy_sc.yaml.
 
     ```yaml
@@ -497,7 +503,7 @@ As a cluster-admin:
 
 As part of creating the role and role binding, you've associated the SCC with the role and bound it to the service account (SA). This associates the SA with the SCC such that any pod running as the SA has access to the SCC.
 
-In the next step, as a Deployer, you will use this SA to fix the deployment that failed to validate your security contexts in the previous step.
+In the next step, as a deployer, you will use this SA to fix the deployment that failed to validate your security contexts in the previous step.
 
 ## Step 4: Create a deployment using the service account that can use the SCC
 
