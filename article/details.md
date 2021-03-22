@@ -332,8 +332,6 @@ The service account now has direct access to the SCC.
 
 ### Admission
 
-(_Rich, I've tried to improve our explanation of Admission and Prioritization, to make it better align with the docs. Please review this for accuracy; ask Johnnie for help if needed._)
-
 _[Admission control](https://docs.openshift.com/container-platform/4.6/authentication/managing-security-context-constraints.html#admission_configuring-internal-oauth)_ with SCCs allows for control over the creation of resources based on the capabilities granted to a user. It is used by the cluster to decide whether to create a resource by comparing the permissions requested by the pod to those granted by the SCC.
 
 What happens when a pod has access to multiple SCCs? This occurs when the pod's user and service account, as well as the groups and roles they belong to, have been assigned multiple SCCs.
@@ -362,7 +360,7 @@ When the complete set of available SCCs is determined, they are ordered by:
 1. If priorities are equal, the SCCs will be sorted from most restrictive to least restrictive
 1. If both priorities and restrictions are equal, the SCCs will be sorted by name
 
-Note that admission control will compare the security context to all of the SCCs until a match is found or until none is found. Prioritization only changes the order that the SCCs are considered, it does not change the approval outcome.
+Note that admission control will compare the security context to all of the SCCs (in priority order) until a match is found or until none is found. Prioritization only changes the order that the SCCs are considered, it does not change the approval outcome.
 
 ## How a deployment specifies permissions
 
@@ -471,7 +469,7 @@ metadata:
 ```
 
 The annotations define default values for:
-(_Rich, I think I've described correctly how these defaults are used, but please check my descriptions for accuracy._)
+
 * SELinux options (MCS stands for multi-category security) -- If the SCC sets `seLinuxContext.type` to `MustRunAs` and does not set the `seLinuxContext.seLinuxOptions`, then the project's MSC options will be used as the default SELinux options
 * group IDs -- If the SCC sets the `supplementalGroups.type` to `MustRunAs` but does not specify the range, the project's supplemental groups range will be used by default
 * user IDs -- If the SCC sets the `runAsUser.type` to `MustRunAsRange` but does not specify the range, the project's UID range will be used by default
@@ -488,8 +486,11 @@ Using our example deployment manifest, let's see how it will fare against the `r
 
 ![pod-vs-restricted](images/pod-vs-restricted.png)
 
-![pod-vs-restricted-text](images/pod-vs-restricted-text.png)
-(_Rich, I would convert pod-vs-restricted-text.png to text or ask the editors to do it. In #1 and #2, instead of saying "the range in the project yaml is used," I'd say "the project's default range is used." Why does #2 pass? Should say FAIL. #3 should say PASS. #4 should say "The SYS_TIME capability is not" instead of "Both capabilities are not" since the manifest only lists one capability. As the #5 label shows, #5 is set in the SCC, not the manifest; so the description should be something like "Since the SCC sets the seLinuxContext to MustRunAs but doesn't specify the context, the container will be assigned the project's default context value s0:c26,c5."_)
+1. **FAIL** : The manifest requests `fsGroup: 5555`. The SCC is set to `MustRunAs`, which means the requested ID must be within the specified range. Since the SCC does not provide a range, the project's default range is used. In this case, `5555` is not in the range `1000000000-1000009999`.
+1. **FAIL** : The manifest requests `runAsUser: 1234`. The SCC is set to `MustRunARange`, which means the requested ID  must be within the specified range. Since the SCC does not provide a range, the project's default range is used. In this case, `1234` is not in the range `1000000000-1000009999`.
+1. **PASS** : The manifest request `runAsGroup: 5678`. The SCC is set to `RunAsAny`, which means the group ID `5678` is allowed and will be assigned to all containers.
+1. **FAIL** : The `SYS_TIME` capability is not specifically allowed by the SCC (not listed in either `allowedCapabilities` or in `defaultAddCapabilities`).
+1. **NOTE** : Since the SCC sets the `seLinuxContext` to `MustRunAs` but doesn't specify the context, the container will be assigned the project's default context value `s0:c26,c5`.
 
 ### Deployment vs custom SCC
 
@@ -497,8 +498,10 @@ Now let's try the same deployment against our **custom** SCC.
 
 ![pod-vs-custom](images/pod-vs-custom.png)
 
-![pod-vs-custom-text](images/pod-vs-custom-text.png)
-(_Rich, I would convert pod-vs-custom-text.png to text or ask the editors to do it. There are a couple of typos to fix._)
+1. **PASS** : The manifest requests `fsGroup: 5555`. The SCC is set to `MustRunAs`, which means the requested ID must be within the specified range `5000-6000`, which it is.
+1. **PASS** : The manifest requests `runAsUser: 1234`. The SCC is set to `MustRunARange`, which means the requested ID must be within the specified range `1000-2000`, which it is.
+1. **PASS** : The manifest request `runAsGroup: 5678`. The SCC is set to `MustRunAs`, which means the requested ID must be within the specified range `5000-6000`, which it is.
+1. **PASS** : The `SYS_TIME` capability is allowed by default by the SCC.
 
 ## Summary
 
