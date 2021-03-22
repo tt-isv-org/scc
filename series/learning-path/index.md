@@ -20,14 +20,14 @@ To get started, click on a card below, or see the previous table for a complete 
 
 ## Learn about:
 
-- [] Article: [Introduction to Red Hat OpenShift security context constraints](../../article/intro.md)
+- [ ] Article: [Introduction to Red Hat OpenShift security context constraints](../../article/intro.md)
 
     * Security context constraint concepts
     * Deploying a secure pod
     * What is a security context constraint?
     * How a pod requests additional access
 
-- [] Article: [Allow pods to access protected resources in Red Hat OpenShift using security context constraints](../../article/details.md)
+- [ ] Article: [Allow pods to access protected resources in Red Hat OpenShift using security context constraints](../../article/details.md)
 
     * How an SCC specifies permissions
     * OpenShift's Predefined SCCs
