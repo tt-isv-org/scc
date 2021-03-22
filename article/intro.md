@@ -66,9 +66,9 @@ This diagram illustrates the deployment process:
 1. The **administrator** creates a role and assigns it an SCC.
 1. The **administrator** creates a service account and binds it to the role.
 1. The **deployer** applies the deployment manifest, thereby deploying the application.
-1. OpenShift processes the deployment manifest and attempts to deploy the pod. The deployment process will determine which SCC to use based on the sevice account specified in the manifest. It then compares the permissions requested by the manifest against the permissions allowed by the SCC. Does the associated SCC provide all of the permissions the deployment manifest requests?
-1. **NO**: Some requested permissions are not granted, so the deployment fails.
-1. **YES**: All requested permissions are granted, so the deployment creates the pod and runs the application.
+1. OpenShift processes the deployment manifest and attempts to deploy the pod. The deployment process will determine which SCC to use based on the sevice account specified in the manifest. The **admission process** compares the security context of the manifest against the SCC and decides whether to block or allow the pod to deploy.
+1. **BLOCK**: Some requested permissions are not granted, so the deployment fails.
+1. **ALLOW**: All requested permissions are granted, so the deployment creates the pod and runs the application.
 
 If the pod is denied the requested permissions, the administrator will need to:
 
