@@ -1,8 +1,8 @@
-# Introduction to Red Hat OpenShift security practices using security context constraints
+# Introduction to Red Hat OpenShift security context constraints
 
-Red Hat OpenShift employs several practices to secures a cluster's environment, one of which is to prevent a container process from running as the root user. Containers can still run in this environment because most applications don't need root or privileged access, but this limit is a significant problem for an application that needs access to protected resources. An OpenShift cluster administrator can configure security context constraints (SCC) to enable access to specific protected resources. With an SCC, a deployer can enable an application to have access to protected resources.
+Red Hat OpenShift employs several practices to secure a cluster's environment, one of which is to prevent a container process from running as the root user. Containers are still able to run in this environment because most applications don't need root or privileged access, but this limit is a significant problem for an application that needs access to Linux's protected resources. An OpenShift cluster administrator can configure security context constraints (SCC) to enable access to specific protected resources. With an SCC, a deployer can enable an application to have access to protected resources.
 
-This article is part 1 of a two-part series on security context constraints (SCC). This one introduces SCCs and gives an overview of how SCCs solve the access problem. Part 2, "[How security context constraints in Red Hat OpenShift work](https://github.ibm.com/TT-ISV-org/scc/blob/main/article/details.md)," digs into the details of how SCCs are implemented and administered. It assumes you have a general understanding of how to deploy an application to an OpenShift cluster and how the cluster manages a workload.
+This article is part 1 of a two-part series on security context constraints (SCC). This one introduces SCCs and gives an overview of how SCCs solve the access problem. Part 2, "[Allow pods to access protected resources in Red Hat OpenShift using security context constraints](https://github.ibm.com/TT-ISV-org/scc/blob/main/article/details.md)," digs into the details of how SCCs are implemented and administered. It assumes you have a general understanding of how to deploy an application to an OpenShift cluster and how the cluster manages a workload.
 
 ## Deploying a secure pod
 
@@ -25,11 +25,9 @@ This diagram illustrates the components and process that allow an application to
 1. An administrator assigns a **security context constraint** to the service account that grants the requested access
     * The SCC can be assigned directly to the service account or indirectly via an RBAC role or group
 1. The SCC may be one of OpenShift's predefined SCCs or may be a custom SCC
-1. If the SCC grants the access, the pod deploys successfully
+1. If the SCC grants the access, the admission process allows the pod to deploy
 
 >**NOTE**: An OpenShift service account is a special type of user account that can be used programmatically without using a regular user’s credentials.
-
->**IMPORTANT**: The service account should be scoped to a single project. Any deployment able to run as the service account has access to the SCC and the access it grants. By limiting the service account's scope to a project, deployments in other projects cannot access the SCC unless other projects have their own service accounts.
 
 Now that we know the personas involved and the general process that they follow, let's explain the components they use in more detail.
 
@@ -41,21 +39,21 @@ _[Security context constraints](https://docs.openshift.com/container-platform/4.
 
 ## How a pod requests additional access
 
-While an SCC grants access to protected resources, each pod that wants to use that access must request it. To requests access to the resources its application needs, a pod specifies those resources in the **security context** section of the pod manifest. The manifest also specifies the service account that the pod expects will be able to grant this access. When the manifest is deployed, the cluster associates the pod with the service account, which is associated with the SCC. The cluster will deploy the pod successfully only if the SCC grants the access that the pod requests.
+While an SCC grants access to protected resources, each pod that wants to use that access must request it. To request access to the resources its application needs, a pod specifies those permissions in the **security context** field of the pod manifest. The manifest also specifies the service account that the pod expects will be able to grant this access. When the manifest is deployed, the cluster associates the pod with the service account, which is associated with the SCC. For the cluster to deploy the pod, the SCC must grant the permissions that the pod requests.
 
-One way to envision this relationship is to think of the SCC as a lock protecting system resources and the manifest being the key. The pod deploys successfully only if the key fits.
+One way to envision this relationship is to think of the SCC as a lock protecting system resources and the manifest being the key. The pod is allowed to deploy only if the key fits.
 
 This diagram illustrates that relationship:
 
 ![capabilities](images/capabilities.png)
 
-The diagram shows a deployment that will fail and one that will succeed. In both examples, the pod specifies in its security context that it needs access to two permissions arbitrarily labeled P2 and P5. In the first example, a very restrictive SCC does not grant the access the manifest requests in its security context, so the cluster will refuse to deploy the pod. In the second example, a custom SCC does grant the access the manifest requests in its security context, so the cluster will deploy the pod.
+The diagram shows a deployment that will be blocked by the SCC on the left and will be allowed by the SCC on the right. In both examples, the pod specifies in its security context that it needs access to two permissions arbitrarily labeled P2 and P5. In the first example, a very restrictive SCC does not grant the access the manifest requests in its security context, so the cluster will refuse to deploy the pod. In the second example, a custom SCC does grant the access the manifest requests in its security context, so the cluster will proceed with deploying the pod.
 
 >**IMPORTANT**: As a best-practice, each custom SCC should grant as little access as possible. If protected resources are like rooms in a building, only allow the users access to the rooms they need. While an SCC can be used to allow a pod to run as a privileged user or even the root user, this should be granted to pods very sparingly.
 
 ## The big picture
 
-To better understand how SCCs are used to control access on a Red Hat OpenShift cluster, lets walk-through a deployment scenario to show how the cluster uses the deployment manifest, service account, and SCC together to determine whether to deploy a pod.
+To better understand how SCCs control access on a Red Hat OpenShift cluster, lets walk through a deployment scenario to show how the cluster's admission process uses the deployment manifest, service account, and SCC together to determine whether to deploy a pod.
 
 This diagram illustrates the deployment process:
 
@@ -77,6 +75,6 @@ If the pod is denied the requested permissions, the administrator will need to:
 
 ## Continue learning
 
-To dig deeper into the details of how SCCs work, check out part 2, "[How security context constraints in Red Hat OpenShift work](https://github.ibm.com/TT-ISV-org/scc/blob/main/article/details.md)" of this article series.
+To dig deeper into the details of how SCCs work, check out part 2, "[Allow pods to access protected resources in Red Hat OpenShift using security context constraints](https://github.ibm.com/TT-ISV-org/scc/blob/main/article/details.md)" of this article series.
 
 To get hands-on experience using SCCs, check out the accompanying tutorial, "[Use security context constraints to restrict and empower your OpenShift workloads](https://github.ibm.com/TT-ISV-org/scc/blob/main/tutorial/index.md)."
