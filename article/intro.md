@@ -6,7 +6,7 @@ This article is part 1 of a two-part series on security context constraints (SCC
 
 ## Deploying a secure pod
 
-An OpenShift cluster provides several features for securing the cluster and the applications running in the cluster, including container security, certificate management, vulnerability scanning, and authentication and authorization. Security context constraints address one aspect of security, namely enabling an application the ability to access protected resources such as shared file systems and [privileged ip ports](https://www.w3.org/Daemon/User/Installation/PrivilegedPorts.html). To prevent even a rogue or hacked application from gaining access to resources it shouldn't be able to access, the access is configured by the pod running the application container and is enforced by the cluster. The application can only access the resources that the pod requests and that the cluster approves.
+An OpenShift cluster provides several features for securing the cluster and the applications running in the cluster, including container security, certificate management, vulnerability scanning, and authentication and authorization. Security context constraints address one aspect of security, namely enabling an application the ability to access protected resources in Linux such as shared file systems and [privileged ip ports](https://www.w3.org/Daemon/User/Installation/PrivilegedPorts.html). To prevent even a rogue or hacked application from gaining access to resources it shouldn't be able to access, the access is configured by the pod running the application container and is enforced by the cluster. The application can only access the resources that the pod requests and that the cluster approves.
 
 An application's access to protected resources is an agreement between three personas:
 
@@ -33,7 +33,7 @@ Now that we know the personas involved and the general process that they follow,
 
 ## What is an SCC?
 
-_[Security context constraints](https://docs.openshift.com/container-platform/4.5/authentication/managing-security-context-constraints.html)_ (SCCs) control the access that pods have to underlying resources, similarly to how role-based access control (RBAC) controls access for users. SCCs enable an administrator to control the resources a pod is allowed to access. By default, a pod is assigned an SCC called `restricted` that blocks access to protected resources. For an application to access protected resources, the pod must have access to SCCs that allow it.
+_[Security context constraints](https://docs.openshift.com/container-platform/4.5/authentication/managing-security-context-constraints.html)_ (SCCs) enable administrators to control permissions for pods, permissions that manage containers' access to protected resources in Linux for privileged users, shared file storage, and capabilities. Similarly to how role-based access control (RBAC) manages access for users, SCCs manage access for pods. By default, a pod is assigned an SCC called `restricted` that blocks access to protected resources. For an application to access protected resources, an SCC that allows it must be available to the pod.
 
 >**NOTE**: SCC enforcement is implemented using SELinux and AppArmor, security modules included in the kernel of all Red Hat Linux distributions. The nodes in an OpenShift v4 cluster can only run on a Red Hat Linux distribution, guaranteeing that the kernel will include those modules.
 
