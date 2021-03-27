@@ -22,9 +22,9 @@ You will learn how to:
 
 Before attempting this hands-on tutorial, you may want to learn about the concepts for how security context constraints are used: "[Introduction to Red Hat OpenShift security context constraints](https://github.ibm.com/TT-ISV-org/scc/blob/main/article/intro.md)." That article explains these overall concepts:
 
-An application's access to protected resources is an agreement between three personas:
+An application's access to protected functions is an agreement between three personas:
 
-* A **developer** who writes an application that accesses protected resources
+* A **developer** who writes an application that accesses protected functions
 * A **deployer** who writes the deployment manifest that must request the access the application requires
 * An **administrator** who decides whether to grant the deployment the access it requests
 

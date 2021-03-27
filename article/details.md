@@ -1,4 +1,4 @@
-# Allow pods to access protected resources in Red Hat OpenShift using security context constraints
+# Allow containers to access protected Linux functions in Red Hat OpenShift using security context constraints
 
 This article is the second in a two-part series on Red Hat OpenShift Security Context Constraints (SCCs). "[Introduction to Red Hat OpenShift security context constraints](https://github.ibm.com/TT-ISV-org/scc/blob/main/article/intro.md)" provides background information on what SCCs are and how they play a key role in configuring security in an OpenShift cluster.
 
@@ -6,7 +6,7 @@ This article builds on those concepts and digs into the details on how to proper
 
 * Details on how SCCs allow permissions
 * The predefined SCCs and when to use them
-* How to create custom SCCs
+* How to create a custom SCC
 * Details on how deployment manifests request permissions
 * How to connect deployment manifests with SCCs
 
@@ -14,8 +14,9 @@ This article builds on those concepts and digs into the details on how to proper
 
 The main points from the first article are:
 
-* By default, OpenShift isolates pods by limiting their access to protected resources in Linux. SCCs allow select pods to access some or all of the protected resources.
-* When a developer implements an application that needs permissions to access protected resources, the deployer must create a deployment manifest that requests those permissions in its security context, and the administrator must assign an SCC that grants those permissions.
+* By default, OpenShift isolates pods by limiting their access to protected functions in Linux. SCCs allow select pods to access some or all of the protected functions.
+* When a developer implements an application that needs permissions to access protected functions, the deployer must create a deployment manifest that requests those permissions in its security context, and the administrator must assign an SCC that grants those permissions.
+  * The container's Linux environment is configured with the permissions requested by the security context and granted by the SCC. If the application attempts to perform a protected function that wasn't requested in the security context, Linux will block the application from performing that function; the application will experience this as an error.
 * The administrator makes an SCC available by assigning it to a service account, ideally via a role.
 * A manifest makes the SCC available to its pods by specifying the service account.
 * Admission allows the cluster to deploy each pod specified by the manifest only if the SCC grants all of the permissions that the manifest requests.
@@ -287,7 +288,7 @@ How the `seLinuxOptions` values are used depends on the value of the `seLinuxCon
 
 ## Making SCCs available
 
-Once an administrator decides to make an SCC (predefined or custom) available to a deployment, how do they make it available? The key resource is the **service account**, which can have SCCs assigned to it (directly or indirectly via a role or group). Once that association exists, a deployment can easily specify that service account.
+Once an administrator decides to make an SCC (predefined or custom) available to a deployment, how do they make it available? The key resource is the **service account**, which can have SCCs assigned to it (directly or indirectly via a role or group). Once that association exists, a deployment can easily specify that service account to gain access to its SCCs.
 
 > **IMPORTANT:** This section describes the use of role-based access control (RBAC) resources and assumes you are familiar with RBAC -- such as user accounts and service accounts, roles and bindings, and how administrators use them to manage permissions and access. For reference, see these pages in the Red Hat OpenShift documentation:
 >
@@ -317,7 +318,7 @@ Use the following command to create a new service account in our current project
 oc create sa my-custom-sa
 ```
 
-> **IMPORTANT:** Each project includes a service account named `default`; the SCC assigned to it is the `restricted` SCC. This means that all deployments get assigned the `restricted` SCC by default. Do not modify the `default` service account, such as by assigning an SCC to it. This would change the defaults for all deployments deployed to that project. Rather, create a new service account and assign SCCs to that.
+> **IMPORTANT:** Each project includes a service account named `default`; the SCC assigned to it is the `restricted` SCC. This means that all deployments get assigned the `restricted` SCC by default. Do not modify the `default` service account, such as by assigning additional SCCs to it. This would change the defaults for all deployments deployed to that project. Rather, create a new service account and assign SCCs to that.
 
 ### Assign SCCs to service accounts
 
@@ -372,7 +373,7 @@ Note that admission control will compare the security context to all of the SCCs
 We've talked a lot about SCCs -- predefined and custom, how they specify permissions, and how they're assigned to service accounts. When does an SCC ever actually get used? The deployer requests permissions for an application, including specifying which SCC to use, by configuring two fields in its deployment manifest:
 
 * One or more security contexts that request the permissions the application needs
-* A service account that's supposed to have an SCC assigned to it that grants these permissions
+* A service account that's supposed to have at least one SCC assigned to it that grants these permissions
 
 A deployment manifest is used to create and build a deployment, which can then deploy a pod. Here is an example of what the YAML for a deployment manifest looks like:
 
@@ -516,7 +517,7 @@ You should now have a good understanding of what SCCs are and how you can use th
 
 The key concepts include:
 
-* To enable accessing protected resources, a deployer writes a deployment manifest for the pod that specifies:
+* To enable accessing protected functions, a deployer writes a deployment manifest for the pod that specifies:
   * A security context (for the pod and/or for each container) requesting the permissions needed by the application. This includes privileges, access control, and capabilities.
   * And a service account that the deployer expects to be able to grant these permissions.
 * For the request to be granted, the administrator must assign a security context constraint (SCC) that grants these permissions to the service account. The SCC can be assigned directly to the service account, or ideally via an RBAC role.
