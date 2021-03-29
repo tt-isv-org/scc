@@ -6,7 +6,7 @@ This article is part 1 of a two-part series on security context constraints (SCC
 
 ## Deploying a secure pod
 
-By default, OpenShift prevents the containers running in a cluster from accessing protected functions--Linux features such as shared file systems, root access, and some core capabilities such as the `KILL` command. When a pod runs, it configures its Linux environment, and by default it blocks  access to these functions. If an application ties to access any of these functions, such as attempting to run as the root user, Linux blocks the application because the pod configured it to.
+By default, OpenShift prevents the containers running in a cluster from accessing protected functions--Linux features such as shared file systems, root access, and some core capabilities such as the `KILL` command. When a pod runs, it configures its Linux environment, and by default it blocks access to these functions. If an application ties to access any of these functions, such as attempting to run as the root user, Linux blocks the application because the pod configured it to.
 
 For an application to access protected functions, its pod must configure its Linux environment to enable that access. Of course, there are reasons applications should not routinely perform protected functions, so any pod can't just enable any access. To enforce security, the cluster limits the access pods can enable, allowing some pods to enable access that others cannot. 
 
@@ -33,7 +33,7 @@ This diagram illustrates the components and process that allow an application to
 
 >**NOTE**: An OpenShift service account is a special type of user account that can be used programmatically without using a regular user’s credentials.
 
-When the cluster starts a container, it does so in a Linux environment that's configured as described in the pod's security context, and only if the SCC grants the permissions requested in the security context.
+A cluster only starts a container if the SCC grants the permissions requested in the security context. When the cluster does start a container, it starts the container in a Linux environment that's configured as described in the pod's security context.
 
 Now that we know the personas involved and the general process that they follow, let's explain the components they use in more detail.
 
