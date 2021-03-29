@@ -14,9 +14,9 @@ This article builds on those concepts and digs into the details on how to proper
 
 The main points from the first article are:
 
-* By default, OpenShift isolates pods by limiting their access to protected functions in Linux. SCCs allow select pods to access some or all of the protected functions.
+* By default, OpenShift isolates containers by limiting their access to protected functions in Linux. SCCs allow select pods to access some or all of the protected functions.
 * When a developer implements an application that needs permissions to access protected functions, the deployer must create a deployment manifest that requests those permissions in its security context, and the administrator must assign an SCC that grants those permissions.
-  * The container's Linux environment is configured with the permissions requested by the security context and granted by the SCC. If the application attempts to perform a protected function that wasn't requested in the security context, Linux will block the application from performing that function; the application will experience this as an error.
+  * The pod configures the container's Linux environment with the permissions requested by the security context and granted by the SCC. If the application attempts to perform a protected function that wasn't requested in the security context, Linux will block the application from performing that function; the application will experience this as an error.
 * The administrator makes an SCC available by assigning it to a service account, ideally via a role.
 * A manifest makes the SCC available to its pods by specifying the service account.
 * Admission allows the cluster to deploy each pod specified by the manifest only if the SCC grants all of the permissions that the manifest requests.
