@@ -6,7 +6,7 @@ This article is part 1 of a two-part series on security context constraints (SCC
 
 ## Deploying a secure pod
 
-By default, OpenShift prevents the containers running in a cluster from accessing protected functions--Linux features such as shared file systems, root access, and some core capabilities such as the `KILL` command. When a pod runs, it configures its Linux environment, and by default it blocks access to these functions. If an application ties to access any of these functions, such as attempting to run as the root user, Linux blocks the application because the pod configured it to.
+By default, OpenShift prevents the containers running in a cluster from accessing protected functions--Linux features such as shared file systems, root access, and some core capabilities such as the `KILL` command. When a pod runs, it configures its Linux environment, and by default it blocks access to these functions. If an application tries to access any of these functions, such as attempting to run as the root user, Linux blocks the application because the pod configured it to.
 
 For an application to access protected functions, its pod must configure its Linux environment to enable that access. Of course, there are reasons applications should not routinely perform protected functions, so any pod can't just enable any access. To enforce security, the cluster limits the access pods can enable, allowing some pods to enable access that others cannot. 
 
