@@ -28,7 +28,7 @@ This diagram illustrates the components and process that allow an application to
 
 1. A developer writes an application
 1. A deployer creates a **deployment manifest** to deploy the application with a pod spec that configures:
-    * A **security context** (for the pod and/or for each container) that specify the access needed by the application, thereby requesting it
+    * A **security context** (for the pod and/or for each container) that specifies the access needed by the application, thereby requesting it
     * A **service account** to grant the requested access
 1. An administrator assigns a **security context constraint** to the service account that grants the requested access, thereby allowing the pod to configure Linux as specified
     * The SCC can be assigned directly to the service account or indirectly via an RBAC role or group
